@@ -1,0 +1,136 @@
+from rest_framework import serializers
+from datetime import date
+from .models import Clinic
+from clinic_panel.models import Doctor, Patient, Appointment
+from accounts.models import User
+
+# -------------------- Clinic --------------------
+class ClinicSerializer(serializers.ModelSerializer):
+    # Extra fields for user creation
+    username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = Clinic
+        fields = [
+            "id", "name", "description", "address", "phone_number",
+            "email", "website", "type", "status", "user",
+            "username", "password"
+        ]
+        read_only_fields = ["user"]  # user is auto-created, not provided directly
+
+    def create(self, validated_data):
+        username = validated_data.pop("username")
+        password = validated_data.pop("password")
+
+        # Create a new user with role CLINIC
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            role="CLINIC"
+        )
+
+        # Link user to clinic
+        clinic = Clinic.objects.create(user=user, **validated_data)
+        return clinic
+
+    def update(self, instance, validated_data):
+        username = validated_data.pop("username", None)
+        password = validated_data.pop("password", None)
+
+        # Update linked user if provided
+        if instance.user:
+            if username:
+                instance.user.username = username
+            if password:
+                instance.user.set_password(password)
+            instance.user.save()
+
+        return super().update(instance, validated_data)
+
+# -------------------- Doctor --------------------
+class DoctorSerializer(serializers.ModelSerializer):
+    # fields for linked user creation
+    username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = Doctor
+        fields = [
+            "id", "clinic", "user",
+            "profile_image", "name", "username", "password",
+            "phone_number", "email", "dob",
+            "years_of_experience", "medical_license_number",
+            "blood_group", "gender", "address", "specialization"
+        ]
+        read_only_fields = ["user"]
+
+    def create(self, validated_data):
+        username = validated_data.pop("username")
+        password = validated_data.pop("password")
+
+        # Create linked user
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            role="DOCTOR"
+        )
+
+        doctor = Doctor.objects.create(user=user, **validated_data)
+        return doctor
+
+    def update(self, instance, validated_data):
+        username = validated_data.pop("username", None)
+        password = validated_data.pop("password", None)
+
+        if instance.user:
+            if username:
+                instance.user.username = username
+            if password:
+                instance.user.set_password(password)
+            instance.user.save()
+
+        return super().update(instance, validated_data)
+# -------------------- Patient --------------------
+class PatientSerializer(serializers.ModelSerializer):
+    age = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Patient
+        fields = [
+            "id", "first_name", "last_name", "email", "phone_number",
+            "dob", "age", "gender", "blood_group", "address", "care_of", "clinic"
+        ]
+        read_only_fields = ["age"]
+
+    def get_age(self, obj):
+        if not obj.dob:
+            return None
+        today = date.today()
+        return today.year - obj.dob.year - (
+            (today.month, today.day) < (obj.dob.month, obj.dob.day)
+        )
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and hasattr(request.user, "clinic_profile"):
+            validated_data["clinic"] = request.user.clinic_profile
+        return super().create(validated_data)
+# -------------------- Appointment --------------------
+class AppointmentSerializer(serializers.ModelSerializer):
+    clinic = ClinicSerializer(read_only=True)
+    doctor = DoctorSerializer(read_only=True)
+    patient = PatientSerializer(read_only=True)
+    created_by = serializers.StringRelatedField()  # shows __str__ of user
+
+    class Meta:
+        model = Appointment
+        fields = "__all__"
+        read_only_fields = ["created_by", "appointment_id"]
+
+    def validate(self, data):
+        appointment_date = data.get("appointment_date")
+        if appointment_date and appointment_date < date.today():
+            raise serializers.ValidationError("Appointment date cannot be in the past.")
+        return data
+
