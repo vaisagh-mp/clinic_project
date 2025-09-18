@@ -4,6 +4,8 @@ from .views import (DoctorDashboardAPIView,
     PrescriptionListCreateAPIView, PrescriptionRetrieveUpdateDeleteAPIView,
 )
 
+app_name = "doctor_panel"
+
 urlpatterns = [
 
     path("dashboard/", DoctorDashboardAPIView.as_view(), name="doctor-dashboard"),

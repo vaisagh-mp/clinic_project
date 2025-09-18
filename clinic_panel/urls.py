@@ -4,6 +4,7 @@ from .views import (ClinicDashboardAPIView,
     PatientListCreateAPIView, PatientRetrieveUpdateDeleteAPIView,
     AppointmentListCreateAPIView, AppointmentRetrieveUpdateDeleteAPIView
 )
+app_name = "clinic_panel"
 
 urlpatterns = [
 
