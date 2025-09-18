@@ -3,8 +3,8 @@ POST /api/accounts/login/
 
 Payload:
 {
-  "email": "clinic@example.com",
-  "password": "password123"
+  "username": "admin",
+  "password": "admin"
 }
 
 Response:
