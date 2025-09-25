@@ -200,6 +200,33 @@ server_name 3.111.23.194;
 
 }
 
+
+server {
+    listen 80;
+    server_name 3.109.62.26;
+
+    client_max_body_size 50M;
+
+    # Static files
+    location /static/ {
+        alias /home/ubuntu/clinic/static/;
+    }
+
+    # Media files
+    location /media/ {
+        alias /home/ubuntu/clinic/media/;
+    }
+
+    # DRF API
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:/run/gunicorn.sock;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+}
+
+
 Ctrl + O → Save (Write Out)
 
 Enter → Confirm filename

@@ -6,9 +6,8 @@ from accounts.models import User
 
 # -------------------- Clinic --------------------
 class ClinicSerializer(serializers.ModelSerializer):
-    # Extra fields for user creation
-    username = serializers.CharField(write_only=True)
-    password = serializers.CharField(write_only=True)
+    username = serializers.CharField(write_only=True, required=False)
+    password = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Clinic
@@ -17,20 +16,18 @@ class ClinicSerializer(serializers.ModelSerializer):
             "email", "website", "type", "status", "user",
             "username", "password"
         ]
-        read_only_fields = ["user"]  # user is auto-created, not provided directly
+        read_only_fields = ["user"]
 
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
 
-        # Create a new user with role CLINIC
         user = User.objects.create_user(
             username=username,
             password=password,
             role="CLINIC"
         )
 
-        # Link user to clinic
         clinic = Clinic.objects.create(user=user, **validated_data)
         return clinic
 
@@ -38,13 +35,13 @@ class ClinicSerializer(serializers.ModelSerializer):
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
 
-        # Update linked user if provided
         if instance.user:
             if username:
                 instance.user.username = username
             if password:
                 instance.user.set_password(password)
-            instance.user.save()
+            if username or password:
+                instance.user.save()
 
         return super().update(instance, validated_data)
 
@@ -54,6 +51,7 @@ class DoctorSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     clinic = serializers.SerializerMethodField()
 
+    # Make credentials optional
     username = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(write_only=True, required=False)
 
@@ -82,7 +80,7 @@ class DoctorSerializer(serializers.ModelSerializer):
         if obj.clinic:
             return {
                 "id": obj.clinic.id,
-                "name": obj.clinic.name,  # ensure Clinic has a `name` field
+                "name": obj.clinic.name,
             }
         return None
 
@@ -99,15 +97,18 @@ class DoctorSerializer(serializers.ModelSerializer):
         return doctor
 
     def update(self, instance, validated_data):
+        # Pop optional credentials
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
 
+        # Only update credentials if provided
         if instance.user:
-            if username:
-                instance.user.username = username
-            if password:
-                instance.user.set_password(password)
-            instance.user.save()
+            if username or password:
+                if username:
+                    instance.user.username = username
+                if password:
+                    instance.user.set_password(password)
+                instance.user.save()
 
         return super().update(instance, validated_data)
 # -------------------- Patient --------------------
