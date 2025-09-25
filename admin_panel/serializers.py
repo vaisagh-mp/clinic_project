@@ -50,9 +50,12 @@ class ClinicSerializer(serializers.ModelSerializer):
 
 # -------------------- Doctor --------------------
 class DoctorSerializer(serializers.ModelSerializer):
-    # fields for linked user creation
-    username = serializers.CharField(write_only=True)
-    password = serializers.CharField(write_only=True)
+    # Nested fields
+    user = serializers.SerializerMethodField()
+    clinic = serializers.SerializerMethodField()
+
+    username = serializers.CharField(write_only=True, required=False)
+    password = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Doctor
@@ -65,17 +68,33 @@ class DoctorSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["user"]
 
+    def get_user(self, obj):
+        if obj.user:
+            return {
+                "id": obj.user.id,
+                "username": obj.user.username,
+                "first_name": obj.user.first_name,
+                "last_name": obj.user.last_name,
+            }
+        return None
+
+    def get_clinic(self, obj):
+        if obj.clinic:
+            return {
+                "id": obj.clinic.id,
+                "name": obj.clinic.name,  # ensure Clinic has a `name` field
+            }
+        return None
+
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
 
-        # Create linked user
         user = User.objects.create_user(
             username=username,
             password=password,
             role="DOCTOR"
         )
-
         doctor = Doctor.objects.create(user=user, **validated_data)
         return doctor
 

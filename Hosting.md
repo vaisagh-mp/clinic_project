@@ -10,29 +10,29 @@ sudo apt install -y python3-venv python3-dev libpq-dev postgresql postgresql-con
 # Configure Database Postgresql
 
 `sudo -u postgres psql`
-`CREATE DATABASE eastora;
-CREATE USER eastora WITH PASSWORD 'eastora';`
+CREATE DATABASE clinic;
+CREATE USER clinic WITH PASSWORD 'clinic';
 
-`ALTER ROLE eastora SET client_encoding TO 'utf8';
-ALTER ROLE eastora SET default_transaction_isolation TO 'read committed';
-ALTER ROLE eastora SET timezone TO 'UTC';`
+ALTER ROLE clinic SET client_encoding TO 'utf8';
+ALTER ROLE clinic SET default_transaction_isolation TO 'read committed';
+ALTER ROLE clinic SET timezone TO 'UTC';
 
+GRANT ALL PRIVILEGES ON DATABASE clinic TO clinic;
+\q
 
-`GRANT ALL PRIVILEGES ON DATABASE eastora TO eastora;`
-
-`\q`
 
 
 # Create directory and go to directory
 
-`mkdir ~/eastora
-cd ~/eastora`
+mkdir ~/clinic
+cd ~/clinic
+
 
 
 # Create git and pull project from git
 
 `git init
-git remote add origin https://github.com/vaisagh-mp/eastora.git
+git remote add origin https://github.com/vaisagh-mp/clinic_project.git
 git pull origin main`
 
 # Create virtual environment and activate
@@ -84,7 +84,7 @@ python manage.py runserver 0.0.0.0:8000
 
 # Configuring gunicorn
 
-`gunicorn --bind 0.0.0.0:8000 tourbooking.wsgi`
+`gunicorn --bind 0.0.0.0:8000 clinic_project.wsgi`
 
 # Deactive virtualenv
 
@@ -121,15 +121,16 @@ After=network.target
 [Service]
 User=ubuntu
 Group=www-data
-WorkingDirectory=/home/ubuntu/eastora
-ExecStart=/home/ubuntu/eastora/venv/bin/gunicorn \
- --access-logfile - \
- --workers 3 \
- --bind unix:/run/gunicorn.sock \
- tourbooking.wsgi:application
+WorkingDirectory=/home/ubuntu/clinic
+ExecStart=/home/ubuntu/clinic/venv/bin/gunicorn \
+          --access-logfile - \
+          --workers 3 \
+          --bind unix:/run/gunicorn.sock \
+          clinic_project.wsgi:application
 
 [Install]
 WantedBy=multi-user.target
+
 
 . . .
 
@@ -180,7 +181,7 @@ sudo journalctl -u gunicorn
 sudo systemctl daemon-reload
 sudo systemctl restart gunicorn
 
-`sudo nano /etc/nginx/sites-available/tourbooking`
+`sudo nano /etc/nginx/sites-available/clinic_project`
 
 # Add this code to project file.
 
@@ -208,7 +209,7 @@ Ctrl + X → Exit
 client_max_body_size 50M;
 . . .
 
-`sudo ln -s /etc/nginx/sites-available/tourbooking /etc/nginx/sites-enabled`
+`sudo ln -s /etc/nginx/sites-available/clinic_project /etc/nginx/sites-enabled/clinic_project`
 
 sudo nginx -t
 sudo systemctl restart nginx
