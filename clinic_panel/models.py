@@ -56,7 +56,7 @@ BLOOD_GROUP_CHOICES = [
 ]
 
 class Doctor(BaseModel):
-    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name="doctors")
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
