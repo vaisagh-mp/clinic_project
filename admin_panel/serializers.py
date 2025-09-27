@@ -47,8 +47,13 @@ class DoctorSerializer(serializers.ModelSerializer):
         return rep
 
     def create(self, validated_data):
-        username = validated_data.pop("username")
-        password = validated_data.pop("password")
+        username = validated_data.pop("username", None)
+        password = validated_data.pop("password", None)
+
+        if not username or not password:
+            raise serializers.ValidationError(
+                {"detail": "Username and password are required to create a doctor."}
+            )
 
         user = User.objects.create_user(
             username=username,
@@ -57,6 +62,7 @@ class DoctorSerializer(serializers.ModelSerializer):
         )
         doctor = Doctor.objects.create(user=user, **validated_data)
         return doctor
+
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
@@ -141,9 +147,13 @@ class PatientSerializer(serializers.ModelSerializer):
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)
-    doctor = DoctorSerializer(read_only=True)
-    patient = PatientSerializer(read_only=True)
-    created_by = serializers.StringRelatedField()  # shows __str__ of user
+    doctor = serializers.PrimaryKeyRelatedField(
+        queryset=Doctor.objects.all()
+    )
+    patient = serializers.PrimaryKeyRelatedField(
+        queryset=Patient.objects.all()
+    )
+    created_by = serializers.StringRelatedField(read_only=True)  # shows __str__ of user
 
     class Meta:
         model = Appointment
@@ -155,4 +165,5 @@ class AppointmentSerializer(serializers.ModelSerializer):
         if appointment_date and appointment_date < date.today():
             raise serializers.ValidationError("Appointment date cannot be in the past.")
         return data
+
 
