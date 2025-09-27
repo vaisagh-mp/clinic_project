@@ -188,15 +188,12 @@ class AppointmentListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        # Use this fixed version
         serializer = AppointmentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(
-                created_by=request.user,
-                clinic=request.user
-            )
+            serializer.save(created_by=request.user)  # clinic comes from serializer data
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):

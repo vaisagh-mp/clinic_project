@@ -146,7 +146,7 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    clinic = ClinicSerializer(read_only=True)
+    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
     doctor = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all()
     )
