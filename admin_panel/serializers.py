@@ -146,14 +146,22 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
-    doctor = serializers.PrimaryKeyRelatedField(
-        queryset=Doctor.objects.all()
+    # Nested serializers for GET
+    clinic = ClinicSerializer(read_only=True)
+    doctor = DoctorSerializer(read_only=True)
+    patient = PatientSerializer(read_only=True)
+    created_by = serializers.StringRelatedField(read_only=True)
+
+    # Write-only fields for POST/PUT/PATCH
+    clinic_id = serializers.PrimaryKeyRelatedField(
+        queryset=Clinic.objects.all(), write_only=True, source="clinic"
     )
-    patient = serializers.PrimaryKeyRelatedField(
-        queryset=Patient.objects.all()
+    doctor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
-    created_by = serializers.StringRelatedField(read_only=True)  # shows __str__ of user
+    patient_id = serializers.PrimaryKeyRelatedField(
+        queryset=Patient.objects.all(), write_only=True, source="patient"
+    )
 
     class Meta:
         model = Appointment
@@ -165,5 +173,4 @@ class AppointmentSerializer(serializers.ModelSerializer):
         if appointment_date and appointment_date < date.today():
             raise serializers.ValidationError("Appointment date cannot be in the past.")
         return data
-
 
