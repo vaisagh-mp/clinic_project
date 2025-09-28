@@ -181,18 +181,20 @@ class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        appointments = Appointment.objects.filter(
-            clinic=request.user
-        ).order_by("-appointment_date", "-appointment_time")
+        # Admin: see all appointments
+        appointments = Appointment.objects.all().order_by(
+            "-appointment_date", "-appointment_time"
+        )
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         serializer = AppointmentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(created_by=request.user)  # clinic comes from serializer data
+            serializer.save(created_by=request.user)  # only created_by is user
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 
