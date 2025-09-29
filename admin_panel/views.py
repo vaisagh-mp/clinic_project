@@ -182,28 +182,28 @@ class AppointmentListCreateAPIView(APIView):
 
     def get(self, request):
         # Admin: see all appointments
-        appointments = Appointment.objects.all().order_by(
-            "-appointment_date", "-appointment_time"
-        )
+        appointments = Appointment.objects.all().order_by("-appointment_date", "-appointment_time")
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = AppointmentSerializer(data=request.data)
-        if serializer.is_valid():
-            # if the request.user is a clinic user
-            try:
-                clinic = Clinic.objects.get(user=request.user)
-            except Clinic.DoesNotExist:
-                return Response({"detail": "You are not linked to any clinic."}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data.copy()
 
+        # Admin must provide clinic_id
+        clinic_id = data.get("clinic_id")
+        if not clinic_id:
+            return Response({"detail": "clinic_id is required to create an appointment."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        clinic = get_object_or_404(Clinic, id=clinic_id)
+        serializer = AppointmentSerializer(data=data)
+        if serializer.is_valid():
             serializer.save(
                 created_by=request.user,
-                clinic=clinic  # auto-assign clinic
+                clinic=clinic  # assign clinic based on clinic_id
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
