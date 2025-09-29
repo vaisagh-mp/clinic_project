@@ -172,18 +172,36 @@ class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Only return appointments for the logged-in user's clinic
-        appointments = Appointment.objects.filter(
-            clinic=request.user.clinic_profile
-        ).order_by("-appointment_date", "-appointment_time")
+        if hasattr(request.user, "clinic_profile"):
+            # Clinic panel user → show only their clinic appointments
+            appointments = Appointment.objects.filter(
+                clinic=request.user.clinic_profile
+            )
+        else:
+            # Admin panel user → show all, or filter by ?clinic=ID
+            clinic_id = request.query_params.get("clinic")
+            if clinic_id:
+                appointments = Appointment.objects.filter(clinic_id=clinic_id)
+            else:
+                appointments = Appointment.objects.all()
 
+        appointments = appointments.order_by("-appointment_date", "-appointment_time")
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        # Copy request data so we can inject clinic
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+
+        if hasattr(request.user, "clinic_profile"):
+            # Clinic panel user → force clinic_id to their clinic_profile
+            data["clinic_id"] = request.user.clinic_profile.id
+        else:
+            # Admin panel user → must provide clinic_id in request body
+            if "clinic_id" not in data:
+                return Response(
+                    {"detail": "clinic_id is required for appointment creation."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         serializer = AppointmentSerializer(data=data)
         if serializer.is_valid():
@@ -191,8 +209,6 @@ class AppointmentListCreateAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
