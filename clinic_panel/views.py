@@ -168,41 +168,26 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
     
 # -------------------- Appointment --------------------
-class ClinicAppointmentListCreateAPIView(APIView):
+class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Allow only clinic users
-        if not hasattr(request.user, "clinic_profile"):
-            return Response(
-                {"detail": "Only clinic users can access appointments."},
-                status=status.HTTP_403_FORBIDDEN,
+        if hasattr(request.user, "clinic_profile"):
+            # Clinic panel user → show only their clinic appointments
+            appointments = Appointment.objects.filter(
+                clinic=request.user.clinic_profile
             )
+        else:
+            # Admin panel user → show all, or filter by ?clinic=ID
+            clinic_id = request.query_params.get("clinic")
+            if clinic_id:
+                appointments = Appointment.objects.filter(clinic_id=clinic_id)
+            else:
+                appointments = Appointment.objects.all()
 
-        appointments = Appointment.objects.filter(
-            clinic=request.user.clinic_profile
-        ).order_by("-appointment_date", "-appointment_time")
-
+        appointments = appointments.order_by("-appointment_date", "-appointment_time")
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
-
-    def post(self, request):
-        # Allow only clinic users
-        if not hasattr(request.user, "clinic_profile"):
-            return Response(
-                {"detail": "Only clinic users can create appointments."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        serializer = AppointmentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(
-                clinic=request.user.clinic_profile,
-                created_by=request.user,
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
