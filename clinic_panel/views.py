@@ -168,17 +168,11 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
     
 # -------------------- Appointment --------------------
-class ClinicAppointmentListCreateAPIView(APIView):
+class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Allow only clinic users
-        if not hasattr(request.user, "clinic_profile"):
-            return Response(
-                {"detail": "Only clinic users can access appointments."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        # Only return appointments for the logged-in user's clinic
         appointments = Appointment.objects.filter(
             clinic=request.user.clinic_profile
         ).order_by("-appointment_date", "-appointment_time")
@@ -187,22 +181,17 @@ class ClinicAppointmentListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        # Allow only clinic users
-        if not hasattr(request.user, "clinic_profile"):
-            return Response(
-                {"detail": "Only clinic users can create appointments."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Copy request data so we can inject clinic
+        data = request.data.copy()
+        data["clinic"] = request.user.clinic_profile.id
 
-        serializer = AppointmentSerializer(data=request.data)
+        serializer = AppointmentSerializer(data=data)
         if serializer.is_valid():
-            serializer.save(
-                clinic=request.user.clinic_profile,
-                created_by=request.user,
-            )
+            serializer.save(created_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 
