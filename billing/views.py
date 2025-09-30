@@ -67,114 +67,410 @@ class BaseBillRetrieveUpdateDeleteAPIView(APIView):
 
 
 # -------------------- Material Purchase --------------------
-class MaterialPurchaseBillListCreateAPIView(BaseBillListCreateAPIView):
-    model_class = MaterialPurchaseBill
-    serializer_class = MaterialPurchaseBillSerializer
-
-
-class MaterialPurchaseBillRetrieveUpdateDeleteAPIView(BaseBillRetrieveUpdateDeleteAPIView):
-    model_class = MaterialPurchaseBill
-    serializer_class = MaterialPurchaseBillSerializer
-
-
-# -------------------- Clinic Bill --------------------
-class ClinicBillListCreateAPIView(BaseBillListCreateAPIView):
-    model_class = ClinicBill
-    serializer_class = ClinicBillSerializer
-
-
-class ClinicBillRetrieveUpdateDeleteAPIView(BaseBillRetrieveUpdateDeleteAPIView):
-    model_class = ClinicBill
-    serializer_class = ClinicBillSerializer
-
-
-# -------------------- Lab Bill --------------------
-class LabBillListCreateAPIView(BaseBillListCreateAPIView):
-    model_class = LabBill
-    serializer_class = LabBillSerializer
-
-
-class LabBillRetrieveUpdateDeleteAPIView(BaseBillRetrieveUpdateDeleteAPIView):
-    model_class = LabBill
-    serializer_class = LabBillSerializer
-
-
-# -------------------- Pharmacy Bill --------------------
-class PharmacyBillListCreateAPIView(BaseBillListCreateAPIView):
-    model_class = PharmacyBill
-    serializer_class = PharmacyBillSerializer
-
-
-class PharmacyBillRetrieveUpdateDeleteAPIView(BaseBillRetrieveUpdateDeleteAPIView):
-    model_class = PharmacyBill
-    serializer_class = PharmacyBillSerializer
-
-
-
-# -------------------- Clinic Panel --------------------
-class ClinicBaseBillListCreateAPIView(BaseBillListCreateAPIView):
+class MaterialPurchaseBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        clinic = request.user.clinic_profile
-        bills = self.model_class.objects.filter(clinic=clinic)
-        serializer = self.serializer_class(bills, many=True)
+        bills = MaterialPurchaseBill.objects.all()
+        serializer = MaterialPurchaseBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = request.user.clinic_profile
-        serializer = self.serializer_class(data=request.data)
+        serializer = MaterialPurchaseBillSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(clinic=clinic)  # auto-set clinic
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ClinicBaseBillRetrieveUpdateDeleteAPIView(BaseBillRetrieveUpdateDeleteAPIView):
+class MaterialPurchaseBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, pk):
-        clinic = self.request.user.clinic_profile
-        return get_object_or_404(self.model_class, pk=pk, clinic=clinic)
+        return get_object_or_404(MaterialPurchaseBill, pk=pk)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = MaterialPurchaseBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = MaterialPurchaseBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = MaterialPurchaseBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# Material Purchase Bills
-class ClinicMaterialPurchaseBillListCreateAPIView(ClinicBaseBillListCreateAPIView):
-    model_class = MaterialPurchaseBill
-    serializer_class = MaterialPurchaseBillSerializer
+# -------------------- Clinic Bill --------------------
+class ClinicBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        bills = ClinicBill.objects.all()
+        serializer = ClinicBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ClinicBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ClinicMaterialPurchaseBillRetrieveUpdateDeleteAPIView(ClinicBaseBillRetrieveUpdateDeleteAPIView):
-    model_class = MaterialPurchaseBill
-    serializer_class = MaterialPurchaseBillSerializer
+class ClinicBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(ClinicBill, pk=pk)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = ClinicBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = ClinicBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = ClinicBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# Clinic Bills
-class ClinicClinicBillListCreateAPIView(ClinicBaseBillListCreateAPIView):
-    model_class = ClinicBill
-    serializer_class = ClinicBillSerializer
+# -------------------- Lab Bill --------------------
+class LabBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        bills = LabBill.objects.all()
+        serializer = LabBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = LabBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ClinicClinicBillRetrieveUpdateDeleteAPIView(ClinicBaseBillRetrieveUpdateDeleteAPIView):
-    model_class = ClinicBill
-    serializer_class = ClinicBillSerializer
+class LabBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(LabBill, pk=pk)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = LabBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = LabBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = LabBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# Lab Bills
-class ClinicLabBillListCreateAPIView(ClinicBaseBillListCreateAPIView):
-    model_class = LabBill
-    serializer_class = LabBillSerializer
+# -------------------- Pharmacy Bill --------------------
+class PharmacyBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        bills = PharmacyBill.objects.all()
+        serializer = PharmacyBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = PharmacyBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ClinicLabBillRetrieveUpdateDeleteAPIView(ClinicBaseBillRetrieveUpdateDeleteAPIView):
-    model_class = LabBill
-    serializer_class = LabBillSerializer
+class PharmacyBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(PharmacyBill, pk=pk)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = PharmacyBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = PharmacyBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk)
+        serializer = PharmacyBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+# --------------------------------------- Clinic ------------------------------------------------/
+
+# -------------------- Clinic Material Purchase --------------------
+class ClinicMaterialPurchaseBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        clinic = request.user.clinic_profile
+        bills = MaterialPurchaseBill.objects.filter(clinic=clinic)
+        serializer = MaterialPurchaseBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        clinic = request.user.clinic_profile
+        serializer = MaterialPurchaseBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=clinic)  # auto-attach clinic
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Pharmacy Bills
-class ClinicPharmacyBillListCreateAPIView(ClinicBaseBillListCreateAPIView):
-    model_class = PharmacyBill
-    serializer_class = PharmacyBillSerializer
+class ClinicMaterialPurchaseBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk, clinic):
+        return get_object_or_404(MaterialPurchaseBill, pk=pk, clinic=clinic)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = MaterialPurchaseBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = MaterialPurchaseBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = MaterialPurchaseBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(ClinicBaseBillRetrieveUpdateDeleteAPIView):
-    model_class = PharmacyBill
-    serializer_class = PharmacyBillSerializer
+# -------------------- Clinic Bill --------------------
+class ClinicClinicBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        clinic = request.user.clinic_profile
+        bills = ClinicBill.objects.filter(clinic=clinic)
+        serializer = ClinicBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        clinic = request.user.clinic_profile
+        serializer = ClinicBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=clinic)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicClinicBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk, clinic):
+        return get_object_or_404(ClinicBill, pk=pk, clinic=clinic)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = ClinicBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = ClinicBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = ClinicBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# -------------------- Lab Bill --------------------
+class ClinicLabBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        clinic = request.user.clinic_profile
+        bills = LabBill.objects.filter(clinic=clinic)
+        serializer = LabBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        clinic = request.user.clinic_profile
+        serializer = LabBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=clinic)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk, clinic):
+        return get_object_or_404(LabBill, pk=pk, clinic=clinic)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = LabBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = LabBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = LabBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# -------------------- Pharmacy Bill --------------------
+class ClinicPharmacyBillListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        clinic = request.user.clinic_profile
+        bills = PharmacyBill.objects.filter(clinic=clinic)
+        serializer = PharmacyBillSerializer(bills, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        clinic = request.user.clinic_profile
+        serializer = PharmacyBillSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=clinic)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk, clinic):
+        return get_object_or_404(PharmacyBill, pk=pk, clinic=clinic)
+
+    def get(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = PharmacyBillSerializer(bill)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = PharmacyBillSerializer(bill, data=request.data)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        serializer = PharmacyBillSerializer(bill, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save(clinic=request.user.clinic_profile)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bill = self.get_object(pk, request.user.clinic_profile)
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
