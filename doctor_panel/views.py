@@ -75,10 +75,12 @@ class ConsultationListCreateAPIView(APIView):
             patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
 
             data.append({
-                "appointment_id": a.appointment_id,
+                "appointment_id": a.id,  # or a.appointment_id
                 "date_time": date_time,
                 "patient": patient_name,
+                "patient_id": a.patient.id,       # add this
                 "doctor": a.doctor.name,
+                "doctor_id": a.doctor.id,         # add this
                 "clinic": a.doctor.clinic.name,
                 "status": a.status,
             })
