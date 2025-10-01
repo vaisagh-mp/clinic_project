@@ -87,6 +87,20 @@ class ConsultationListCreateAPIView(APIView):
         data.sort(key=lambda x: x["date_time"])
 
         return Response(data)
+    
+    def post(self, request):
+        doctor = request.user.doctor_profile
+        patient_id = request.data.get("patient")
+        appointment_id = request.data.get("appointment")
+
+        patient = get_object_or_404(Patient, id=patient_id, clinic=doctor.clinic)
+        appointment = get_object_or_404(Appointment, id=appointment_id, doctor=doctor)
+
+        serializer = ConsultationSerializer(data=request.data)
+        if serializer.is_valid():
+            consultation = serializer.save(doctor=doctor, patient=patient, appointment=appointment)
+            return Response(ConsultationSerializer(consultation).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ConsultationRetrieveUpdateDeleteAPIView(APIView):
