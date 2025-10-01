@@ -58,24 +58,31 @@ class ConsultationListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        doctor = request.user.doctor_profile  # logged-in doctor
-        consultations = Consultation.objects.filter(doctor=doctor).select_related("patient", "doctor", "appointment")
-        serializer = ConsultationSerializer(consultations, many=True)
-        return Response(serializer.data)
-
-    def post(self, request):
         doctor = request.user.doctor_profile
-        patient_id = request.data.get("patient")
-        appointment_id = request.data.get("appointment")
 
-        patient = get_object_or_404(Patient, id=patient_id, clinic=doctor.clinic)
-        appointment = get_object_or_404(Appointment, id=appointment_id, doctor=doctor)
+        # Scheduled appointments (without consultations yet)
+        scheduled_appointments = Appointment.objects.filter(
+            doctor=doctor,
+            status="SCHEDULED"
+        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic")
 
-        serializer = ConsultationSerializer(data=request.data)
-        if serializer.is_valid():
-            consultation = serializer.save(doctor=doctor, patient=patient, appointment=appointment)
-            return Response(ConsultationSerializer(consultation).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = []
+        for a in scheduled_appointments:
+            # Format date and time nicely
+            date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
+            data.append({
+                "appointment_id": a.appointment_id,
+                "date_time": date_time,
+                "patient": a.patient.name,
+                "doctor": a.doctor.name,
+                "clinic": a.doctor.clinic.name,
+                "status": a.status,
+            })
+
+        # Optional: sort by date and time
+        data.sort(key=lambda x: x["date_time"])
+
+        return Response(data)
 
 
 class ConsultationRetrieveUpdateDeleteAPIView(APIView):
@@ -111,6 +118,39 @@ class ConsultationRetrieveUpdateDeleteAPIView(APIView):
         consultation.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+# -------------------- AllAppointments --------------------
+
+class DoctorAllAppointmentsAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        doctor = request.user.doctor_profile
+
+        # Fetch all appointments for this doctor
+        appointments = Appointment.objects.filter(doctor=doctor).select_related("patient", "doctor__clinic")
+
+        data = []
+        for a in appointments:
+            # Determine status: if linked to consultation, it's completed, else use appointment.status
+            status = "COMPLETED" if hasattr(a, 'consultation') else a.status
+
+            # Format date & time nicely
+            date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
+
+            data.append({
+                "appointment_id": a.appointment_id,
+                "date_time": date_time,
+                "patient": a.patient.name,
+                "doctor": a.doctor.name,
+                "clinic": a.doctor.clinic.name,
+                "status": status,
+            })
+
+        # Sort by date and time
+        data.sort(key=lambda x: x["date_time"])
+
+        return Response(data)
+    
 
 # -------------------- Prescription --------------------
 class PrescriptionListCreateAPIView(APIView):
