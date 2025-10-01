@@ -10,7 +10,7 @@ urlpatterns = [
 
     path("dashboard/", DoctorDashboardAPIView.as_view(), name="doctor-dashboard"),
 
-    path("doctor/appointments/",DoctorAllAppointmentsAPIView.as_view(), name="doctor-all-appointments"),
+    path("appointments/",DoctorAllAppointmentsAPIView.as_view(), name="doctor-all-appointments"),
     # Consultations
     path("consultations/", ConsultationListCreateAPIView.as_view(), name="doctor-consultation-list-create"),
     path("consultations/<int:pk>/", ConsultationRetrieveUpdateDeleteAPIView.as_view(), name="doctor-consultation-detail"),

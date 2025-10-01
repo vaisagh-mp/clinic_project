@@ -130,27 +130,23 @@ class DoctorAllAppointmentsAPIView(APIView):
     def get(self, request):
         doctor = request.user.doctor_profile
 
-        # Fetch all appointments for this doctor
         appointments = Appointment.objects.filter(doctor=doctor).select_related("patient", "doctor__clinic")
 
         data = []
         for a in appointments:
-            # Determine status: if linked to consultation, it's completed, else use appointment.status
             status = "COMPLETED" if hasattr(a, 'consultation') else a.status
-
-            # Format date & time nicely
             date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
+            patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
 
             data.append({
                 "appointment_id": a.appointment_id,
                 "date_time": date_time,
-                "patient": a.patient.name,
+                "patient": patient_name,
                 "doctor": a.doctor.name,
                 "clinic": a.doctor.clinic.name,
                 "status": status,
             })
 
-        # Sort by date and time
         data.sort(key=lambda x: x["date_time"])
 
         return Response(data)
