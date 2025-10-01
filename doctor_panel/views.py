@@ -70,10 +70,14 @@ class ConsultationListCreateAPIView(APIView):
         for a in scheduled_appointments:
             # Format date and time nicely
             date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
+
+            # Combine first_name + last_name for patient
+            patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
+
             data.append({
                 "appointment_id": a.appointment_id,
                 "date_time": date_time,
-                "patient": a.patient.name,
+                "patient": patient_name,
                 "doctor": a.doctor.name,
                 "clinic": a.doctor.clinic.name,
                 "status": a.status,
