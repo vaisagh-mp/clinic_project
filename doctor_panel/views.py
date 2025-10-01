@@ -59,37 +59,24 @@ class ConsultationListCreateAPIView(APIView):
 
     def get(self, request):
         doctor = request.user.doctor_profile
-
-        # Scheduled appointments (without consultations yet)
         scheduled_appointments = Appointment.objects.filter(
             doctor=doctor,
             status="SCHEDULED"
-        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic")
+        ).exclude(consultation__isnull=False).select_related("patient")
 
         data = []
         for a in scheduled_appointments:
-            # Format date and time nicely
-            date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
-
-            # Combine first_name + last_name for patient
-            patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
-
             data.append({
-                "appointment_id": a.id,  # or a.appointment_id
-                "date_time": date_time,
-                "patient": patient_name,
-                "patient_id": a.patient.id,       # add this
+                "appointment_id": a.id,
+                "date_time": f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}",
+                "patient": f"{a.patient.first_name} {a.patient.last_name}",
+                "patient_id": a.patient.id,
                 "doctor": a.doctor.name,
-                "doctor_id": a.doctor.id,         # add this
-                "clinic": a.doctor.clinic.name,
+                "doctor_id": a.doctor.id,
                 "status": a.status,
             })
-
-        # Optional: sort by date and time
-        data.sort(key=lambda x: x["date_time"])
-
         return Response(data)
-    
+
     def post(self, request):
         doctor = request.user.doctor_profile
         patient_id = request.data.get("patient")
