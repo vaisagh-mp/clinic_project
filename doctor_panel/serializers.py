@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Consultation, Prescription
 from admin_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer
+from datetime import date
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,16 +23,24 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
 
     def get_patient(self, obj):
         patient = obj.consultation.patient
+
+        # Calculate age if dob exists
+        if patient.dob:
+            today = date.today()
+            age = today.year - patient.dob.year - ((today.month, today.day) < (patient.dob.month, patient.dob.day))
+        else:
+            age = None
+
         return {
             "patient_id": patient.id,
             "full_name": f"{patient.first_name} {patient.last_name}",
             "phone_number": patient.phone_number,
             "dob": patient.dob,
-            "age": patient.age,
+            "age": age,
             "gender": patient.gender,
             "blood_group": patient.blood_group,
         }
-
+    
     def get_doctor(self, obj):
         return {
             "id": obj.consultation.doctor.id,
