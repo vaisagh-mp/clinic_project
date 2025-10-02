@@ -75,15 +75,17 @@ class ConsultationListCreateAPIView(APIView):
             patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
 
             data.append({
-                "appointment_id": a.id,  # or a.appointment_id
+                "appointment_id": a.id,
+                "consultation_id": getattr(a, 'consultation', None) and a.consultation.id or None,
                 "date_time": date_time,
                 "patient": patient_name,
-                "patient_id": a.patient.id,       # add this
+                "patient_id": a.patient.id,
                 "doctor": a.doctor.name,
-                "doctor_id": a.doctor.id,         # add this
-                "clinic": a.doctor.clinic.name,
+                "doctor_id": a.doctor.id,
+                "clinic": a.doctor.clinic.name if a.doctor.clinic else None,
                 "status": a.status,
             })
+
 
         # Optional: sort by date and time
         data.sort(key=lambda x: x["date_time"])
