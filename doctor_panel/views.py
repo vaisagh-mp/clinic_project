@@ -61,22 +61,17 @@ class ConsultationListCreateAPIView(APIView):
         doctor = request.user.doctor_profile
 
         # Scheduled appointments (without consultations yet)
-        scheduled_appointments = Appointment.objects.filter(
-            doctor=doctor,
-            status="SCHEDULED"
-        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic")
-
+        appointments = Appointment.objects.filter(
+            doctor=doctor
+        ).select_related("patient", "doctor__clinic", "consultation")
+        
         data = []
-        for a in scheduled_appointments:
-            # Format date and time nicely
+        for a in appointments:
             date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
-
-            # Combine first_name + last_name for patient
             patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
-
             data.append({
                 "appointment_id": a.id,
-                "consultation_id": getattr(a, 'consultation', None) and a.consultation.id or None,
+                "consultation_id": a.consultation.id if hasattr(a, 'consultation') and a.consultation else None,
                 "date_time": date_time,
                 "patient": patient_name,
                 "patient_id": a.patient.id,
@@ -85,6 +80,7 @@ class ConsultationListCreateAPIView(APIView):
                 "clinic": a.doctor.clinic.name if a.doctor.clinic else None,
                 "status": a.status,
             })
+
 
 
         # Optional: sort by date and time
