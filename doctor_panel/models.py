@@ -50,7 +50,7 @@ class Consultation(BaseModel):
     def __str__(self):
         return f"{self.doctor} -> {self.patient} ({self.created_at.date()})"
     
-class Prescription(models.Model):
+class Prescription(BaseModel):
     FREQUENCY_CHOICES = [
         ('1-0-0', '1-0-0 (Morning only)'),
         ('0-1-0', '0-1-0 (Afternoon only)'),
