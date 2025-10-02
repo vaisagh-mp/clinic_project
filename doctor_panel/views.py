@@ -6,6 +6,7 @@ from django.utils import timezone
 from clinic_panel.models import Appointment, Patient
 from .models import Consultation, Prescription
 from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer
+from admin_panel.serializers import AppointmentSerializer
 
 
 class DoctorDashboardAPIView(APIView):
@@ -251,3 +252,11 @@ class DoctorPrescriptionDetailAPIView(APIView):
         serializer = ConsultationSerializer(prescription.consultation)
         return Response(serializer.data)
 
+class DoctorAppointmentDetailAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        # Only allow the doctor to see their own appointments
+        appointment = get_object_or_404(Appointment, pk=pk, doctor=request.user.doctor_profile)
+        serializer = AppointmentSerializer(appointment)
+        return Response(serializer.data)
