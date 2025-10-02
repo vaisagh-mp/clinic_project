@@ -2,6 +2,15 @@ from django.urls import path
 from .views import *
 
 urlpatterns = [
+
+    # Medicine CRUD
+    path("medicines/", MedicineListCreateAPIView.as_view(), name="medicine-list-create"),
+    path("medicines/<int:pk>/", MedicineRetrieveUpdateDeleteAPIView.as_view(), name="medicine-detail"),
+
+    # Procedure CRUD
+    path("procedures/", ProcedureListCreateAPIView.as_view(), name="procedure-list-create"),
+    path("procedures/<int:pk>/", ProcedureRetrieveUpdateDeleteAPIView.as_view(), name="procedure-detail"),
+    
     # ---------------- Admin ----------------
     path("admin/material-purchase/", MaterialPurchaseBillListCreateAPIView.as_view(), name="admin-material-purchase-list-create"),
     path("admin/material-purchase/<int:pk>/", MaterialPurchaseBillRetrieveUpdateDeleteAPIView.as_view(), name="admin-material-purchase-detail"),
@@ -28,11 +37,5 @@ urlpatterns = [
     path("clinic/pharmacy-bill/", ClinicPharmacyBillListCreateAPIView.as_view(), name="clinic-pharmacy-bill-list-create"),
     path("clinic/pharmacy-bill/<int:pk>/", ClinicPharmacyBillRetrieveUpdateDeleteAPIView.as_view(), name="clinic-pharmacy-bill-detail"),
 
-    # Medicine CRUD
-    path("medicines/", MedicineListCreateAPIView.as_view(), name="medicine-list-create"),
-    path("medicines/<int:pk>/", MedicineRetrieveUpdateDeleteAPIView.as_view(), name="medicine-detail"),
-
-    # Procedure CRUD
-    path("procedures/", ProcedureListCreateAPIView.as_view(), name="procedure-list-create"),
-    path("procedures/<int:pk>/", ProcedureRetrieveUpdateDeleteAPIView.as_view(), name="procedure-detail"),
+    
 ]
