@@ -47,10 +47,6 @@ class MaterialPurchaseBill(BaseBill):
                 number = 1
             self.bill_number = f"MPB-{number:05d}"
 
-        # Calculate total_amount from related items
-        total = sum(item.subtotal for item in getattr(self, 'items', []).all())
-        self.total_amount = total
-
         super().save(*args, **kwargs)
 
 
@@ -90,11 +86,8 @@ class ClinicBill(BaseBill):
                 number = 1
             self.bill_number = f"CB-{number:05d}"
 
-        # Calculate total_amount from related items
-        total = sum(item.subtotal for item in getattr(self, 'items', []).all())
-        self.total_amount = total
+        super().save(*args, **kwargs)  
 
-        super().save(*args, **kwargs)
 
 
 class ClinicBillItem(models.Model):
@@ -134,10 +127,7 @@ class LabBill(BaseBill):
                 number = 1
             self.bill_number = f"LB-{number:05d}"
 
-        # Calculate total_amount from related items
-        total = sum(item.cost for item in getattr(self, 'items', []).all())
-        self.total_amount = total
-
+        # DO NOT calculate total here on creation
         super().save(*args, **kwargs)
 
 
