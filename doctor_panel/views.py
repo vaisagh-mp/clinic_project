@@ -177,8 +177,7 @@ class PrescriptionListCreateAPIView(APIView):
     def get(self, request, consultation_id):
         doctor = request.user.doctor_profile
         consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
-        prescriptions = consultation.prescriptions.all()
-        serializer = PrescriptionSerializer(prescriptions, many=True)
+        serializer = ConsultationSerializer(consultation)
         return Response(serializer.data)
 
     def post(self, request, consultation_id):

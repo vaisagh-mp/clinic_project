@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Consultation, Prescription
+from admin_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -8,24 +9,23 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["consultation"]
 
 class ConsultationSerializer(serializers.ModelSerializer):
-    prescriptions = PrescriptionSerializer(many=True, write_only=True)  # allow nested input
-
+    prescriptions = PrescriptionSerializer(many=True, read_only=True)
+    patient = PatientSerializer(read_only=True)
+    doctor = DoctorSerializer(read_only=True)
+    clinic = serializers.SerializerMethodField()
+    
     class Meta:
         model = Consultation
         fields = [
-            "id", "doctor", "patient", "appointment",
-            "notes", "temperature", "pulse", "respiratory_rate", "spo2",
-            "height", "weight", "bmi", "waist",
-            "complaints", "diagnosis", "advices", "investigations",
-            "allergies", "next_consultation", "empty_stomach_required",
+            "id", "doctor", "patient", "clinic", "appointment",
+            "notes", "advices", "temperature", "pulse", "respiratory_rate", "spo2",
+            "height", "weight", "bmi", "waist", "complaints", "diagnosis",
+            "investigations", "allergies", "next_consultation", "empty_stomach_required",
             "prescriptions",
         ]
-        read_only_fields = ["doctor", "id", "created_at"]
 
-    def create(self, validated_data):
-        prescriptions_data = validated_data.pop("prescriptions", [])
-        consultation = Consultation.objects.create(**validated_data)
-        for presc in prescriptions_data:
-            Prescription.objects.create(consultation=consultation, **presc)
-        return consultation
+    def get_clinic(self, obj):
+        if hasattr(obj.doctor, "clinic"):
+            return ClinicSerializer(obj.doctor.clinic).data
+        return None
 
