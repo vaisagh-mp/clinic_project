@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from clinic_panel.models import Appointment, Patient
 from .models import Consultation, Prescription
-from .serializers import ConsultationSerializer, PrescriptionSerializer
+from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer
 
 
 class DoctorDashboardAPIView(APIView):
@@ -226,3 +226,28 @@ class PrescriptionRetrieveUpdateDeleteAPIView(APIView):
         prescription = get_object_or_404(Prescription, id=pk, consultation=consultation)
         prescription.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+
+class DoctorPrescriptionListAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        doctor = request.user.doctor_profile
+        prescriptions = Prescription.objects.filter(
+            consultation__doctor=doctor
+        ).order_by('-created_at')  # newest first
+        serializer = PrescriptionListSerializer(prescriptions, many=True)
+        return Response(serializer.data)
+    
+class DoctorPrescriptionDetailAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        doctor = request.user.doctor_profile
+        prescription = get_object_or_404(
+            Prescription, id=pk, consultation__doctor=doctor
+        )
+        serializer = ConsultationSerializer(prescription.consultation)
+        return Response(serializer.data)
+
