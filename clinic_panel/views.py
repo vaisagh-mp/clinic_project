@@ -183,7 +183,7 @@ class AppointmentListCreateAPIView(APIView):
             appointments = Appointment.objects.filter(
                 doctor=request.user.doctor_profile
             )
-            
+
         else:
             # Admin panel user → show all, or filter by ?clinic=ID
             clinic_id = request.query_params.get("clinic")
@@ -221,8 +221,14 @@ class AppointmentListCreateAPIView(APIView):
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk, clinic):
-        return get_object_or_404(Appointment, pk=pk, clinic=clinic)
+    def get_object(self, pk):
+        # Filter by doctor, clinic, or admin depending on user type
+        if hasattr(self.request.user, "doctor_profile"):
+            return get_object_or_404(Appointment, pk=pk, doctor=self.request.user.doctor_profile)
+        elif hasattr(self.request.user, "clinic_profile"):
+            return get_object_or_404(Appointment, pk=pk, clinic=self.request.user.clinic_profile)
+        else:
+            return get_object_or_404(Appointment, pk=pk)
 
     def get(self, request, pk):
         appointment = self.get_object(pk, request.user.clinic_profile)
