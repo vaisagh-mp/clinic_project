@@ -177,6 +177,13 @@ class AppointmentListCreateAPIView(APIView):
             appointments = Appointment.objects.filter(
                 clinic=request.user.clinic_profile
             )
+
+        # Doctor panel user → show only their appointments
+        elif hasattr(request.user, "doctor_profile"):
+            appointments = Appointment.objects.filter(
+                doctor=request.user.doctor_profile
+            )
+            
         else:
             # Admin panel user → show all, or filter by ?clinic=ID
             clinic_id = request.query_params.get("clinic")
