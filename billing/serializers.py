@@ -71,6 +71,7 @@ class ClinicBillItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['subtotal']  # subtotal calculated automatically
 
 class ClinicBillSerializer(serializers.ModelSerializer):
+    clinic = serializers.StringRelatedField()
     items = ClinicBillItemSerializer(many=True)
 
     class Meta:
@@ -118,6 +119,7 @@ class LabBillItemSerializer(serializers.ModelSerializer):
 
 
 class LabBillSerializer(serializers.ModelSerializer):
+    clinic = serializers.StringRelatedField()
     items = LabBillItemSerializer(many=True)
 
     class Meta:
