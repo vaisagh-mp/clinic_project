@@ -17,7 +17,8 @@ class MaterialPurchaseItemSerializer(serializers.ModelSerializer):
 
 
 class MaterialPurchaseBillSerializer(serializers.ModelSerializer):
-    clinic = serializers.StringRelatedField()
+    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # show name
+    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())  # accept ID on write
     items = MaterialPurchaseItemSerializer(many=True)
 
     class Meta:
@@ -71,7 +72,8 @@ class ClinicBillItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['subtotal']  # subtotal calculated automatically
 
 class ClinicBillSerializer(serializers.ModelSerializer):
-    clinic = serializers.StringRelatedField()
+    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # show name
+    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())  # accept ID on write
     items = ClinicBillItemSerializer(many=True)
 
     class Meta:
@@ -119,7 +121,8 @@ class LabBillItemSerializer(serializers.ModelSerializer):
 
 
 class LabBillSerializer(serializers.ModelSerializer):
-    clinic = serializers.StringRelatedField()
+    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # show name
+    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())  # accept ID on write
     items = LabBillItemSerializer(many=True)
 
     class Meta:
