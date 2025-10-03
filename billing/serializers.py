@@ -23,7 +23,7 @@ class MaterialPurchaseBillSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MaterialPurchaseBill
-        fields = ['id', 'bill_number', 'clinic', 'bill_date', 'status',
+        fields = ['id', 'bill_number', 'clinic', 'clinic_name', 'bill_date', 'status',
                   'total_amount', 'supplier_name', 'invoice_number', 'items']
         read_only_fields = ['bill_number', 'total_amount']
 
@@ -78,7 +78,7 @@ class ClinicBillSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClinicBill
-        fields = ['id', 'bill_number', 'clinic', 'bill_date', 'status', 'total_amount', 'vendor_name', 'items']
+        fields = ['id', 'bill_number', 'clinic', 'clinic_name', 'bill_date', 'status', 'total_amount', 'vendor_name', 'items']
         read_only_fields = ['bill_number', 'total_amount']
 
     def create(self, validated_data):
@@ -127,7 +127,7 @@ class LabBillSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LabBill
-        fields = ['id', 'bill_number', 'clinic', 'bill_date', 'status', 'total_amount',
+        fields = ['id', 'bill_number', 'clinic', 'clinic_name', 'bill_date', 'status', 'total_amount',
                   'lab_name', 'work_description', 'items']
         read_only_fields = ['bill_number', 'total_amount']
 
