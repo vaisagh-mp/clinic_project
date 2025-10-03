@@ -34,8 +34,12 @@ urlpatterns = [
     path("clinic/lab-bill/", ClinicLabBillListCreateAPIView.as_view(), name="clinic-lab-bill-list-create"),
     path("clinic/lab-bill/<int:pk>/", ClinicLabBillRetrieveUpdateDeleteAPIView.as_view(), name="clinic-lab-bill-detail"),
 
-    path("clinic/pharmacy-bill/", ClinicPharmacyBillListCreateAPIView.as_view(), name="clinic-pharmacy-bill-list-create"),
-    path("clinic/pharmacy-bill/<int:pk>/", ClinicPharmacyBillRetrieveUpdateDeleteAPIView.as_view(), name="clinic-pharmacy-bill-detail"),
+    # Admin endpoints
+    path("admin/procedure-payments/", AdminProcedurePaymentListCreateAPIView.as_view(), name="admin-procedure-payments"),
+    path("admin/procedure-payments/<int:pk>/", AdminProcedurePaymentDetailAPIView.as_view(), name="admin-procedure-payment-detail"),
 
+    # Clinic endpoints
+    path("clinic/procedure-payments/", ClinicProcedurePaymentListCreateAPIView.as_view(), name="clinic-procedure-payments"),
+    path("clinic/procedure-payments/<int:pk>/", ClinicProcedurePaymentDetailAPIView.as_view(), name="clinic-procedure-payment-detail"),
     
 ]

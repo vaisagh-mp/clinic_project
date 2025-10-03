@@ -303,3 +303,26 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
 
         return instance
 
+# ---------------------------------------------------------------------------------------------------
+
+class ProcedurePaymentSerializer(serializers.ModelSerializer):
+    bill_number = serializers.CharField(source="bill_item.bill.bill_number", read_only=True)
+    procedure_name = serializers.CharField(source="bill_item.procedure.name", read_only=True)
+
+    class Meta:
+        model = ProcedurePayment
+        fields = [
+            "id",
+            "bill_item",       # expects bill_item id on POST/PATCH
+            "bill_number",     # read-only
+            "procedure_name",  # read-only
+            "amount_paid",
+            "payment_date",
+            "notes",
+        ]
+        read_only_fields = ["payment_date", "bill_number", "procedure_name"]
+
+    def validate_bill_item(self, value):
+        if value.item_type != "PROCEDURE":
+            raise serializers.ValidationError("Selected bill_item is not a procedure.")
+        return value

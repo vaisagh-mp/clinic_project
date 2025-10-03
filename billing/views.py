@@ -1,17 +1,19 @@
 from rest_framework.views import APIView
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
 from .models import (
-    MaterialPurchaseBill, ClinicBill, LabBill, PharmacyBill, Medicine, Procedure
+    MaterialPurchaseBill, ClinicBill, LabBill, PharmacyBill, Medicine, Procedure, ProcedurePayment
 )
 from .serializers import (
-    MaterialPurchaseBillSerializer, ClinicBillSerializer, LabBillSerializer, PharmacyBillSerializer, MedicineSerializer, ProcedureSerializer
+    MaterialPurchaseBillSerializer, ClinicBillSerializer, LabBillSerializer, PharmacyBillSerializer, MedicineSerializer, ProcedureSerializer, ProcedurePaymentSerializer
 )
-
 
 # -------------------- Generic CRUD View Template --------------------
 class BaseBillListCreateAPIView(APIView):
+
     permission_classes = [permissions.IsAuthenticated]
 
     model_class = None
@@ -568,3 +570,59 @@ class ProcedureRetrieveUpdateDeleteAPIView(APIView):
         procedure = get_object_or_404(Procedure, pk=pk)
         procedure.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+
+
+# Admin: Full access
+class AdminProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = ProcedurePaymentSerializer
+
+    def get_queryset(self):
+        queryset = ProcedurePayment.objects.all().select_related(
+            "bill_item__bill", "bill_item__procedure"
+        )
+        clinic_id = self.request.query_params.get("clinic")
+        if clinic_id:  # Optional filtering by clinic
+            queryset = queryset.filter(bill_item__bill__clinic_id=clinic_id)
+        return queryset
+
+
+class AdminProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ProcedurePaymentSerializer
+
+    def get_queryset(self):
+        return ProcedurePayment.objects.all().select_related(
+            "bill_item__bill", "bill_item__procedure"
+        )
+
+
+
+# Clinic: Restricted to their own clinic
+class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = ProcedurePaymentSerializer
+
+    def get_queryset(self):
+        user_clinic = getattr(self.request.user, "clinic_id", None)
+        return ProcedurePayment.objects.filter(
+            bill_item__bill__clinic_id=user_clinic
+        ).select_related("bill_item__bill", "bill_item__procedure")
+
+    def perform_create(self, serializer):
+        user_clinic = getattr(self.request.user, "clinic_id", None)
+        bill_item = serializer.validated_data["bill_item"]
+
+        # Ensure bill_item belongs to the same clinic as the user
+        if bill_item.bill.clinic_id != user_clinic:
+            raise PermissionDenied("You cannot create payments for another clinic's bills.")
+        serializer.save()
+
+
+class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ProcedurePaymentSerializer
+
+    def get_queryset(self):
+        user_clinic = getattr(self.request.user, "clinic_id", None)
+        return ProcedurePayment.objects.filter(
+            bill_item__bill__clinic_id=user_clinic
+        ).select_related("bill_item__bill", "bill_item__procedure")
