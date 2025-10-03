@@ -17,6 +17,7 @@ class MaterialPurchaseItemSerializer(serializers.ModelSerializer):
 
 
 class MaterialPurchaseBillSerializer(serializers.ModelSerializer):
+    clinic = serializers.StringRelatedField()
     items = MaterialPurchaseItemSerializer(many=True)
 
     class Meta:
