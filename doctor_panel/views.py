@@ -149,26 +149,37 @@ class DoctorAllAppointmentsAPIView(APIView):
     def get(self, request):
         doctor = request.user.doctor_profile
 
-        appointments = Appointment.objects.filter(doctor=doctor).select_related("patient", "doctor__clinic")
+        # fetch appointments for this doctor
+        appointments = Appointment.objects.filter(
+            doctor=doctor
+        ).select_related("patient", "doctor__clinic")
 
-        data = []
-        for a in appointments:
-            status = "COMPLETED" if hasattr(a, 'consultation') else a.status
-            date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
-            patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
+        # serialize with full details
+        serializer = AppointmentSerializer(appointments, many=True)
 
-            data.append({
-                "appointment_id": a.appointment_id,
-                "date_time": date_time,
-                "patient": patient_name,
-                "doctor": a.doctor.name,
-                "clinic": a.doctor.clinic.name,
-                "status": status,
-            })
+        return Response(serializer.data)
 
-        data.sort(key=lambda x: x["date_time"])
+class DoctorScheduledAppointmentsAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-        return Response(data)
+    def get(self, request):
+        doctor = request.user.doctor_profile
+        appointments = Appointment.objects.filter(
+            doctor=doctor, status="SCHEDULED"
+        ).select_related("patient", "doctor__clinic")
+
+        serializer = AppointmentSerializer(appointments, many=True)
+        return Response(serializer.data)
+    
+
+class DoctorAppointmentDetailAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        # Only allow the doctor to see their own appointments
+        appointment = get_object_or_404(Appointment, pk=pk, doctor=request.user.doctor_profile)
+        serializer = AppointmentSerializer(appointment)
+        return Response(serializer.data)
     
 
 # -------------------- Prescription --------------------
@@ -252,11 +263,4 @@ class DoctorPrescriptionDetailAPIView(APIView):
         serializer = ConsultationSerializer(prescription.consultation)
         return Response(serializer.data)
 
-class DoctorAppointmentDetailAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, pk):
-        # Only allow the doctor to see their own appointments
-        appointment = get_object_or_404(Appointment, pk=pk, doctor=request.user.doctor_profile)
-        serializer = AppointmentSerializer(appointment)
-        return Response(serializer.data)
