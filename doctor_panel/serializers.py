@@ -4,10 +4,6 @@ from admin_panel.serializers import PatientSerializer, DoctorSerializer, ClinicS
 from datetime import date
 
 class DoctorAppointmentSerializer(serializers.ModelSerializer):
-    """
-    Serializer used for doctor-specific appointment endpoints.
-    Focuses on patient + clinic info, and hides write-only ID fields.
-    """
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
 
@@ -20,13 +16,13 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "appointment_time",
             "reason",
             "status",
-            "appointment_type",
-            "department",
+            "notes",
             "patient",
             "clinic",
-            "created_at",
+            "created_by",
         ]
-        read_only_fields = ["id", "appointment_id", "created_at"]
+        read_only_fields = ["id", "appointment_id", "created_by"]
+
 
 
 class PrescriptionSerializer(serializers.ModelSerializer):
