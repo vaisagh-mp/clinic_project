@@ -173,7 +173,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return f"{obj.patient.first_name} {obj.patient.last_name}"
 
     def get_doctor(self, obj):
-        return f"{obj.doctor.first_name} {obj.doctor.last_name}"
+        return f"{obj.doctor.name}"
 
     def get_date_time(self, obj):
         return f"{obj.appointment_date} {obj.appointment_time}"
