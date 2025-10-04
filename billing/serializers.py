@@ -79,7 +79,7 @@ class ClinicBillSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClinicBill
         fields = ['id', 'bill_number', 'clinic', 'clinic_name', 'bill_date', 'status', 'total_amount', 'vendor_name', 'items']
-        read_only_fields = ['bill_number', 'total_amount']
+        read_only_fields = ['bill_number', 'total_amount', 'clinic']
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
