@@ -146,12 +146,11 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    clinic = ClinicSerializer(read_only=True)  # already good
-    doctor = DoctorSerializer(read_only=True)  # change to nested serializer
-    patient = PatientSerializer(read_only=True)  # change to nested serializer
-    created_by = serializers.StringRelatedField(read_only=True)
+    patient = serializers.SerializerMethodField()
+    doctor = serializers.SerializerMethodField()
+    clinic = serializers.CharField(source="clinic.name", read_only=True)
+    phone_number = serializers.CharField(source="patient.phone_number", read_only=True)
 
-    # For creating/updating, accept IDs
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
@@ -166,5 +165,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
         model = Appointment
         fields = "__all__"
         read_only_fields = ["created_by", "appointment_id"]
+
+    def get_patient(self, obj):
+        return f"{obj.patient.first_name} {obj.patient.last_name}"
+
+    def get_doctor(self, obj):
+        return f"{obj.doctor.first_name} {obj.doctor.last_name}"
+
 
 
