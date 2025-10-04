@@ -146,31 +146,24 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    # Nested serializers for GET
-    clinic = ClinicSerializer(read_only=True)
-    doctor = DoctorSerializer(read_only=True)
-    patient = PatientSerializer(read_only=True)
+    clinic = ClinicSerializer(read_only=True)  # already good
+    doctor = DoctorSerializer(read_only=True)  # change to nested serializer
+    patient = PatientSerializer(read_only=True)  # change to nested serializer
     created_by = serializers.StringRelatedField(read_only=True)
 
-    # Write-only fields for POST/PUT/PATCH
-    clinic_id = serializers.PrimaryKeyRelatedField(
-        queryset=Clinic.objects.all(), write_only=True, source="clinic"
-    )
+    # For creating/updating, accept IDs
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
     patient_id = serializers.PrimaryKeyRelatedField(
         queryset=Patient.objects.all(), write_only=True, source="patient"
     )
+    clinic_id = serializers.PrimaryKeyRelatedField(
+        queryset=Clinic.objects.all(), write_only=True, source="clinic"
+    )
 
     class Meta:
         model = Appointment
         fields = "__all__"
         read_only_fields = ["created_by", "appointment_id"]
-
-    def validate(self, data):
-        appointment_date = data.get("appointment_date")
-        if appointment_date and appointment_date < date.today():
-            raise serializers.ValidationError("Appointment date cannot be in the past.")
-        return data
 
