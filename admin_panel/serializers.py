@@ -146,22 +146,16 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    # Nested fields for frontend
     patient = serializers.SerializerMethodField()
-    doctor = serializers.SerializerMethodField()
+    doctor = serializers.SerializerMethodField()  # change this
     clinic = serializers.CharField(source="clinic.name", read_only=True)
-    date_time = serializers.SerializerMethodField()  # combine date & time
+    phone_number = serializers.CharField(source="patient.phone_number", read_only=True)
+    date_time = serializers.SerializerMethodField()
 
     # For creating/updating appointments using IDs
-    doctor_id = serializers.PrimaryKeyRelatedField(
-        queryset=Doctor.objects.all(), write_only=True, source="doctor"
-    )
-    patient_id = serializers.PrimaryKeyRelatedField(
-        queryset=Patient.objects.all(), write_only=True, source="patient"
-    )
-    clinic_id = serializers.PrimaryKeyRelatedField(
-        queryset=Clinic.objects.all(), write_only=True, source="clinic"
-    )
+    doctor_id = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all(), write_only=True, source="doctor")
+    patient_id = serializers.PrimaryKeyRelatedField(queryset=Patient.objects.all(), write_only=True, source="patient")
+    clinic_id = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all(), write_only=True, source="clinic")
 
     class Meta:
         model = Appointment
@@ -186,5 +180,6 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     def get_date_time(self, obj):
         return f"{obj.appointment_date} {obj.appointment_time}"
+
 
 
