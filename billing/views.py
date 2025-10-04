@@ -8,7 +8,7 @@ from .models import (
     MaterialPurchaseBill, ClinicBill, LabBill, PharmacyBill, Medicine, Procedure, ProcedurePayment
 )
 from .serializers import (
-    MaterialPurchaseBillSerializer, ClinicBillSerializer, LabBillSerializer, PharmacyBillSerializer, MedicineSerializer, ProcedureSerializer, ProcedurePaymentSerializer
+    MaterialPurchaseBillSerializer, ClinicBillSerializer, LabBillSerializer, PharmacyBillSerializer, MedicineSerializer, ProcedureSerializer, ProcedurePaymentSerializer, ClinicPanelBillSerializer, LabPanelBillSerializer, ClinicPharmacyBillSerializer
 )
 
 # -------------------- Generic CRUD View Template --------------------
@@ -274,7 +274,7 @@ class PharmacyBillRetrieveUpdateDeleteAPIView(APIView):
 class ClinicMaterialPurchaseBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request): 
         clinic = request.user.clinic_profile
         bills = MaterialPurchaseBill.objects.filter(clinic=clinic)
         serializer = MaterialPurchaseBillSerializer(bills, many=True)
@@ -329,14 +329,14 @@ class ClinicClinicBillListCreateAPIView(APIView):
     def get(self, request):
         clinic = request.user.clinic_profile
         bills = ClinicBill.objects.filter(clinic=clinic)
-        serializer = ClinicBillSerializer(bills, many=True)
+        serializer = ClinicPanelBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         clinic = request.user.clinic_profile
-        serializer = ClinicBillSerializer(data=request.data)
+        serializer = ClinicPanelBillSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
+            serializer.save(clinic=clinic)  # ✅ Auto-assign clinic
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -349,22 +349,22 @@ class ClinicClinicBillRetrieveUpdateDeleteAPIView(APIView):
 
     def get(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = ClinicBillSerializer(bill)
+        serializer = ClinicPanelBillSerializer(bill)
         return Response(serializer.data)
 
     def put(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = ClinicBillSerializer(bill, data=request.data)
+        serializer = ClinicPanelBillSerializer(bill, data=request.data)
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()  # clinic auto-assigned
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = ClinicBillSerializer(bill, data=request.data, partial=True)
+        serializer = ClinicPanelBillSerializer(bill, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()  # clinic auto-assigned
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -381,14 +381,14 @@ class ClinicLabBillListCreateAPIView(APIView):
     def get(self, request):
         clinic = request.user.clinic_profile
         bills = LabBill.objects.filter(clinic=clinic)
-        serializer = LabBillSerializer(bills, many=True)
+        serializer = LabPanelBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         clinic = request.user.clinic_profile
-        serializer = LabBillSerializer(data=request.data)
+        serializer = LabPanelBillSerializer(data=request.data, context={'clinic': clinic})
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -401,22 +401,22 @@ class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
 
     def get(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = LabBillSerializer(bill)
+        serializer = LabPanelBillSerializer(bill)
         return Response(serializer.data)
 
     def put(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = LabBillSerializer(bill, data=request.data)
+        serializer = LabPanelBillSerializer(bill, data=request.data, context={'clinic': request.user.clinic_profile})
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = LabBillSerializer(bill, data=request.data, partial=True)
+        serializer = LabPanelBillSerializer(bill, data=request.data, partial=True, context={'clinic': request.user.clinic_profile})
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -433,14 +433,17 @@ class ClinicPharmacyBillListCreateAPIView(APIView):
     def get(self, request):
         clinic = request.user.clinic_profile
         bills = PharmacyBill.objects.filter(clinic=clinic)
-        serializer = PharmacyBillSerializer(bills, many=True)
+        serializer = ClinicPharmacyBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         clinic = request.user.clinic_profile
-        serializer = PharmacyBillSerializer(data=request.data)
+        serializer = ClinicPharmacyBillSerializer(
+            data=request.data,
+            context={'clinic': clinic}  # Pass clinic to serializer
+        )
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
+            serializer.save()  # clinic handled in serializer
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -453,22 +456,31 @@ class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
 
     def get(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = PharmacyBillSerializer(bill)
+        serializer = ClinicPharmacyBillSerializer(bill)
         return Response(serializer.data)
 
     def put(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = PharmacyBillSerializer(bill, data=request.data)
+        serializer = ClinicPharmacyBillSerializer(
+            bill,
+            data=request.data,
+            context={'clinic': request.user.clinic_profile}
+        )
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
         bill = self.get_object(pk, request.user.clinic_profile)
-        serializer = PharmacyBillSerializer(bill, data=request.data, partial=True)
+        serializer = ClinicPharmacyBillSerializer(
+            bill,
+            data=request.data,
+            partial=True,
+            context={'clinic': request.user.clinic_profile}
+        )
         if serializer.is_valid():
-            serializer.save(clinic=request.user.clinic_profile)
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

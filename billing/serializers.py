@@ -113,6 +113,47 @@ class ClinicBillSerializer(serializers.ModelSerializer):
         return instance
 
 
+class ClinicPanelBillSerializer(serializers.ModelSerializer):
+    clinic_name = serializers.CharField(source="clinic.name", read_only=True)
+    items = ClinicBillItemSerializer(many=True)
+
+    class Meta:
+        model = ClinicBill
+        fields = [
+            'id', 'bill_number', 'clinic_name',
+            'bill_date', 'status', 'total_amount',
+            'vendor_name', 'items'
+        ]
+        read_only_fields = ['bill_number', 'total_amount', 'clinic']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        bill = ClinicBill.objects.create(**validated_data)
+
+        for item_data in items_data:
+            ClinicBillItem.objects.create(bill=bill, **item_data)
+
+        bill.total_amount = sum(item.subtotal for item in bill.items.all())
+        bill.save()
+        return bill
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                ClinicBillItem.objects.create(bill=instance, **item_data)
+            instance.total_amount = sum(item.subtotal for item in instance.items.all())
+            instance.save()
+
+        return instance
+
+
 # -------------------- Lab Bill --------------------
 class LabBillItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -164,7 +205,48 @@ class LabBillSerializer(serializers.ModelSerializer):
 
         return instance
 
+class LabPanelBillSerializer(serializers.ModelSerializer):
+    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # Show clinic name
+    items = LabBillItemSerializer(many=True)  # Nested items
 
+    class Meta:
+        model = LabBill
+        fields = ['id', 'bill_number', 'clinic_name', 'bill_date', 'status', 'total_amount',
+                  'lab_name', 'work_description', 'items']
+        read_only_fields = ['bill_number', 'total_amount', 'clinic_name', 'clinic']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+
+        # Assign clinic automatically from context/user
+        clinic = self.context['request'].user.clinic_profile
+        bill = LabBill.objects.create(clinic=clinic, **validated_data)
+
+        for item_data in items_data:
+            LabBillItem.objects.create(bill=bill, **item_data)
+
+        # Update total_amount
+        bill.total_amount = sum(item.cost for item in bill.items.all())
+        bill.save()
+        return bill
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        # Update main bill fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                LabBillItem.objects.create(bill=instance, **item_data)
+
+            instance.total_amount = sum(item.cost for item in instance.items.all())
+            instance.save()
+
+        return instance
 # -------------------- Pharmacy --------------------
 class MedicineSerializer(serializers.ModelSerializer):
     class Meta:
@@ -302,6 +384,131 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
             instance.save()
 
         return instance
+
+
+
+
+# serializers.py
+
+class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
+    # Accept medicine/procedure by ID for POST/PUT
+    medicine_id = serializers.PrimaryKeyRelatedField(
+        source="medicine",
+        queryset=Medicine.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
+    procedure_id = serializers.PrimaryKeyRelatedField(
+        source="procedure",
+        queryset=Procedure.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
+
+    # Return full details for GET
+    medicine = serializers.StringRelatedField(read_only=True)
+    procedure = serializers.StringRelatedField(read_only=True)
+
+    total_paid = serializers.ReadOnlyField()
+    balance_due = serializers.ReadOnlyField()
+
+    class Meta:
+        model = PharmacyBillItem
+        fields = [
+            "id", "item_type",
+            "medicine_id", "medicine",
+            "procedure_id", "procedure",
+            "quantity", "unit_price", "subtotal",
+            "total_paid", "balance_due"
+        ]
+
+
+class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
+    # Clinic is read-only (assigned automatically)
+    clinic = serializers.StringRelatedField(read_only=True)
+
+    # Accept patient ID on write
+    patient_id = serializers.PrimaryKeyRelatedField(
+        source="patient",
+        queryset=Patient.objects.all(),
+        write_only=True
+    )
+
+    patient = serializers.SerializerMethodField()
+    items = ClinicPharmacyBillItemSerializer(many=True, required=False)
+
+    class Meta:
+        model = PharmacyBill
+        fields = [
+            'id', 'bill_number',
+            'clinic', 'patient_id', 'patient',
+            'bill_date', 'status', 'total_amount',
+            'items'
+        ]
+        read_only_fields = ['bill_number', 'total_amount', 'clinic']
+
+    def get_patient(self, obj):
+        if obj.patient:
+            return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+        return None
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        clinic = self.context['clinic']  # Clinic assigned from logged-in user
+        bill = PharmacyBill.objects.create(clinic=clinic, **validated_data)
+
+        for item_data in items_data:
+            item_type = item_data.get('item_type')
+            quantity = item_data.get('quantity', 1)
+
+            if item_type == 'MEDICINE':
+                PharmacyBillItem.objects.create(
+                    bill=bill,
+                    item_type='MEDICINE',
+                    medicine=item_data.get('medicine'),
+                    quantity=quantity,
+                    unit_price=item_data.get('unit_price', 0)
+                )
+            elif item_type == 'PROCEDURE':
+                PharmacyBillItem.objects.create(
+                    bill=bill,
+                    item_type='PROCEDURE',
+                    procedure=item_data.get('procedure'),
+                    quantity=quantity,
+                    unit_price=item_data.get('unit_price', 0)
+                )
+
+        bill.total_amount = sum(item.subtotal for item in bill.items.all())
+        bill.save()
+        return bill
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        # Update bill fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                PharmacyBillItem.objects.create(
+                    bill=instance,
+                    item_type=item_data.get('item_type'),
+                    medicine=item_data.get('medicine'),
+                    procedure=item_data.get('procedure'),
+                    quantity=item_data.get('quantity', 1),
+                    unit_price=item_data.get('unit_price', 0)
+                )
+
+            instance.total_amount = sum(item.subtotal for item in instance.items.all())
+            instance.save()
+
+        return instance
+
 
 # ---------------------------------------------------------------------------------------------------
 
