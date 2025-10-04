@@ -226,6 +226,10 @@ class PharmacyBillItem(models.Model):
         elif self.item_type == 'PROCEDURE' and self.procedure:
             self.unit_price = self.procedure.price
 
+        # fallback to 0 to avoid TypeError
+        self.unit_price = self.unit_price or 0
+
+        # calculate subtotal safely
         self.subtotal = self.quantity * self.unit_price
 
         # Handle medicine stock only when creating a new item
@@ -237,10 +241,11 @@ class PharmacyBillItem(models.Model):
 
         super().save(*args, **kwargs)
 
-        # Update bill total
+        # Update bill total after saving
         total = sum(item.subtotal for item in self.bill.items.all())
         self.bill.total_amount = total
         self.bill.save()
+
 
     def __str__(self):
         if self.item_type == "PROCEDURE" and self.procedure:
