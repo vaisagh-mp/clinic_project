@@ -146,21 +146,21 @@ class PatientSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
-    # Nested fields for frontend
-    patient = serializers.SerializerMethodField()
-    doctor = serializers.SerializerMethodField()
-    clinic = serializers.CharField(source="clinic.name", read_only=True)
-    date_time = serializers.SerializerMethodField()  # combine date & time
+    # Nested serializers for GET
+    clinic = ClinicSerializer(read_only=True)
+    doctor = DoctorSerializer(read_only=True)
+    patient = PatientSerializer(read_only=True)
+    created_by = serializers.StringRelatedField(read_only=True)
 
-    # For creating/updating appointments using IDs
+    # Write-only fields for POST/PUT/PATCH
+    clinic_id = serializers.PrimaryKeyRelatedField(
+        queryset=Clinic.objects.all(), write_only=True, source="clinic"
+    )
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
     patient_id = serializers.PrimaryKeyRelatedField(
         queryset=Patient.objects.all(), write_only=True, source="patient"
-    )
-    clinic_id = serializers.PrimaryKeyRelatedField(
-        queryset=Clinic.objects.all(), write_only=True, source="clinic"
     )
 
     class Meta:
@@ -168,24 +168,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["created_by", "appointment_id"]
 
-    def get_patient(self, obj):
-        return {
-            "id": obj.patient.id,
-            "first_name": obj.patient.first_name,
-            "last_name": obj.patient.last_name,
-            "phone_number": obj.patient.phone_number,
-        }
-
-    def get_doctor(self, obj):
-        return {
-            "id": obj.doctor.id,
-            "name": obj.doctor.name,
-            "profile_image": obj.doctor.profile_image.url if obj.doctor.profile_image else None,
-            "specialization": obj.doctor.specialization,
-        }
-
-    def get_date_time(self, obj):
-        return f"{obj.appointment_date} {obj.appointment_time}"
-
-
+    def validate(self, data):
+        appointment_date = data.get("appointment_date")
+        if appointment_date and appointment_date < date.today():
+            raise serializers.ValidationError("Appointment date cannot be in the past.")
+        return data
 
