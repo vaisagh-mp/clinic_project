@@ -220,22 +220,32 @@ class PharmacyBillItemSerializer(serializers.ModelSerializer):
         ]
 
 class PharmacyBillSerializer(serializers.ModelSerializer):
+    # Accept IDs on write
     clinic_id = serializers.PrimaryKeyRelatedField(
-        source="clinic", queryset=Clinic.objects.all(), write_only=True
+        source="clinic",
+        queryset=Clinic.objects.all(),
+        write_only=True
     )
     patient_id = serializers.PrimaryKeyRelatedField(
-        source="patient", queryset=Patient.objects.all(), write_only=True
+        source="patient",
+        queryset=Patient.objects.all(),
+        write_only=True
     )
-    clinic = serializers.StringRelatedField(read_only=True)
+
+    # Show names on read
+    clinic = serializers.StringRelatedField(read_only=True)   # will call Clinic.__str__()
     patient = serializers.SerializerMethodField()
+
     items = PharmacyBillItemSerializer(many=True, required=False)
 
     class Meta:
         model = PharmacyBill
         fields = [
-            'id', 'bill_number', 'clinic_id', 'clinic',
-            'patient_id', 'patient', 'bill_date', 'status',
-            'total_amount', 'items'
+            'id', 'bill_number',
+            'clinic_id', 'clinic',
+            'patient_id', 'patient',
+            'bill_date', 'status', 'total_amount',
+            'items'
         ]
         read_only_fields = ['bill_number', 'total_amount']
 
@@ -247,28 +257,50 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         bill = PharmacyBill.objects.create(**validated_data)
+
         for item_data in items_data:
             item_type = item_data.get('item_type')
-            item = PharmacyBillItem.objects.create(bill=bill, **item_data)
-            item.subtotal = item.quantity * item.unit_price
-            item.save()
+            quantity = item_data.get('quantity', 1)
+
+            if item_type == 'MEDICINE':
+                PharmacyBillItem.objects.create(
+                    bill=bill,
+                    item_type='MEDICINE',
+                    medicine=item_data.get('medicine'),  # ✅ already an instance
+                    quantity=quantity
+                )
+            elif item_type == 'PROCEDURE':
+                PharmacyBillItem.objects.create(
+                    bill=bill,
+                    item_type='PROCEDURE',
+                    procedure=item_data.get('procedure'),  # ✅ already an instance
+                    quantity=quantity
+                )
+
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
         return bill
 
+
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
+
+        # Update bill fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
         if items_data is not None:
+            # Delete old items
             instance.items.all().delete()
+            # Add new items
             for item_data in items_data:
-                item = PharmacyBillItem.objects.create(bill=instance, **item_data)
-                item.subtotal = item.quantity * item.unit_price
-                item.save()
-        instance.total_amount = sum(item.subtotal for item in instance.items.all())
-        instance.save()
+                PharmacyBillItem.objects.create(bill=instance, **item_data)
+
+            # Update total_amount
+            instance.total_amount = sum(item.subtotal for item in instance.items.all())
+            instance.save()
+
         return instance
 
 # ---------------------------------------------------------------------------------------------------
