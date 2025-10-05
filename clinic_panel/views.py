@@ -209,10 +209,13 @@ class AppointmentListCreateAPIView(APIView):
         data = request.data.copy()
         user = request.user
         serializer_class = self.get_serializer_class()
-
+    
+        context = {}  # <-- add context
         # Auto-assign clinic for clinic panel
         if hasattr(user, "clinic_profile"):
             data["clinic_id"] = user.clinic_profile.id
+            context["clinic"] = user.clinic_profile  # <-- add this
+    
         else:
             # Admin must provide clinic_id
             if "clinic_id" not in data:
@@ -220,13 +223,14 @@ class AppointmentListCreateAPIView(APIView):
                     {"detail": "clinic_id is required for appointment creation."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
-        serializer = serializer_class(data=data)
+    
+        serializer = serializer_class(data=data, context=context)  # <-- pass context
         if serializer.is_valid():
             serializer.save(created_by=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+    
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
