@@ -8,6 +8,7 @@ from .models import Doctor, Patient, Appointment
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer   
+from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
 
 
 
@@ -292,75 +293,32 @@ class AppointmentRetrieveUpdateDeleteAPIView(APIView):
 
 # ------------------------------------------------Prescriptions-------------------------------------------------------------
 
-class ClinicPrescriptionListCreateAPIView(APIView):
+class ClinicPrescriptionListAPIView(APIView):
+    """
+    List all prescriptions for the logged-in clinic.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         clinic = request.user.clinic_profile
         prescriptions = Prescription.objects.filter(
             consultation__doctor__clinic=clinic
-        ).select_related("consultation", "consultation__doctor", "consultation__patient")
+        ).select_related("consultation", "consultation__patient").order_by("-created_at")
 
-        serializer = PrescriptionSerializer(prescriptions, many=True)
+        serializer = ClinicPrescriptionListSerializer(prescriptions, many=True)
         return Response(serializer.data)
 
-    def post(self, request):
-        """Create a prescription under a specific consultation belonging to this clinic."""
-        clinic = request.user.clinic_profile
-        consultation_id = request.data.get("consultation_id")
 
-        if not consultation_id:
-            return Response(
-                {"detail": "consultation_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        consultation = get_object_or_404(Consultation, id=consultation_id, doctor__clinic=clinic)
-        serializer = PrescriptionSerializer(data=request.data)
-
-        if serializer.is_valid():
-            prescription = serializer.save(consultation=consultation)
-            return Response(
-                PrescriptionSerializer(prescription).data,
-                status=status.HTTP_201_CREATED,
-            )
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ClinicPrescriptionRetrieveUpdateDeleteAPIView(APIView):
+class ClinicPrescriptionDetailAPIView(APIView):
+    """
+    Retrieve a single prescription detail for the logged-in clinic.
+    """
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self, pk, clinic):
-        """Ensure the prescription belongs to a consultation under this clinic."""
-        return get_object_or_404(Prescription, id=pk, consultation__doctor__clinic=clinic)
 
     def get(self, request, pk):
         clinic = request.user.clinic_profile
-        prescription = self.get_object(pk, clinic)
-        serializer = PrescriptionSerializer(prescription)
+        prescription = get_object_or_404(
+            Prescription, id=pk, consultation__doctor__clinic=clinic
+        )
+        serializer = ClinicConsultationSerializer(prescription.consultation)
         return Response(serializer.data)
-
-    def put(self, request, pk):
-        clinic = request.user.clinic_profile
-        prescription = self.get_object(pk, clinic)
-        serializer = PrescriptionSerializer(prescription, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def patch(self, request, pk):
-        clinic = request.user.clinic_profile
-        prescription = self.get_object(pk, clinic)
-        serializer = PrescriptionSerializer(prescription, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, pk):
-        clinic = request.user.clinic_profile
-        prescription = self.get_object(pk, clinic)
-        prescription.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
