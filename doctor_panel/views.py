@@ -189,12 +189,16 @@ class DoctorScheduledAppointmentsAPIView(APIView):
 
     def get(self, request):
         doctor = request.user.doctor_profile
+        # Only appointments without a consultation
         appointments = Appointment.objects.filter(
-            doctor=doctor, status="SCHEDULED"
+            doctor=doctor,
+            status="SCHEDULED",
+            consultation__isnull=True  # <-- filter out those with consultation
         ).select_related("patient", "doctor__clinic")
 
         serializer = DoctorAppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
+
 
 
 class DoctorAppointmentDetailAPIView(APIView):
