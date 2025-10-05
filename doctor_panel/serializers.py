@@ -6,6 +6,7 @@ from datetime import date
 class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
+    has_consultation = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
@@ -20,8 +21,11 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "patient",
             "clinic",
             "created_by",
+            "has_consultation",
         ]
-        read_only_fields = ["id", "appointment_id", "created_by"]
+
+    def get_has_consultation(self, obj):
+        return hasattr(obj, "consultation")
 
 
 
