@@ -4,8 +4,10 @@ from rest_framework.views import APIView
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 
-from .models import Doctor, Patient, Appointment    
-from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer   
+from .models import Doctor, Patient, Appointment
+from doctor_panel.models import Prescription, Consultation    
+from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
+from doctor_panel.serializers import PrescriptionSerializer   
 
 
 
@@ -171,48 +173,56 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        if hasattr(request.user, "clinic_profile"):
-            # Clinic panel user → show only their clinic appointments
-            appointments = Appointment.objects.filter(
-                clinic=request.user.clinic_profile
-            )
+    def get_serializer_class(self):
+        """Choose serializer based on user type."""
+        user = self.request.user
+        if hasattr(user, "clinic_profile"):
+            return ClinicAppointmentSerializer
+        return AppointmentSerializer
 
-        # Doctor panel user → show only their appointments
-        elif hasattr(request.user, "doctor_profile"):
-            appointments = Appointment.objects.filter(
-                doctor=request.user.doctor_profile
-            )
+    def get_queryset(self, request):
+        """Filter appointments by user type."""
+        user = request.user
+
+        if hasattr(user, "clinic_profile"):
+            return Appointment.objects.filter(clinic=user.clinic_profile)
+
+        elif hasattr(user, "doctor_profile"):
+            return Appointment.objects.filter(doctor=user.doctor_profile)
 
         else:
-            # Admin panel user → show all, or filter by ?clinic=ID
             clinic_id = request.query_params.get("clinic")
             if clinic_id:
-                appointments = Appointment.objects.filter(clinic_id=clinic_id)
-            else:
-                appointments = Appointment.objects.all()
+                return Appointment.objects.filter(clinic_id=clinic_id)
+            return Appointment.objects.all()
 
-        appointments = appointments.order_by("-appointment_date", "-appointment_time")
-        serializer = AppointmentSerializer(appointments, many=True)
+    def get(self, request):
+        appointments = self.get_queryset(request).order_by(
+            "-appointment_date", "-appointment_time"
+        )
+        serializer_class = self.get_serializer_class()
+        serializer = serializer_class(appointments, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         data = request.data.copy()
+        user = request.user
+        serializer_class = self.get_serializer_class()
 
-        if hasattr(request.user, "clinic_profile"):
-            # Clinic panel user → force clinic_id to their clinic_profile
-            data["clinic_id"] = request.user.clinic_profile.id
+        # Auto-assign clinic for clinic panel
+        if hasattr(user, "clinic_profile"):
+            data["clinic_id"] = user.clinic_profile.id
         else:
-            # Admin panel user → must provide clinic_id in request body
+            # Admin must provide clinic_id
             if "clinic_id" not in data:
                 return Response(
                     {"detail": "clinic_id is required for appointment creation."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        serializer = AppointmentSerializer(data=data)
+        serializer = serializer_class(data=data)
         if serializer.is_valid():
-            serializer.save(created_by=request.user)
+            serializer.save(created_by=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -222,41 +232,135 @@ class AppointmentRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, pk):
-        # Filter by doctor, clinic, or admin depending on user type
-        if hasattr(self.request.user, "doctor_profile"):
-            return get_object_or_404(Appointment, pk=pk, doctor=self.request.user.doctor_profile)
-        elif hasattr(self.request.user, "clinic_profile"):
-            return get_object_or_404(Appointment, pk=pk, clinic=self.request.user.clinic_profile)
+        user = self.request.user
+        if hasattr(user, "doctor_profile"):
+            return get_object_or_404(Appointment, pk=pk, doctor=user.doctor_profile)
+        elif hasattr(user, "clinic_profile"):
+            return get_object_or_404(Appointment, pk=pk, clinic=user.clinic_profile)
         else:
             return get_object_or_404(Appointment, pk=pk)
 
+    def get_serializer_class(self):
+        """Return serializer based on user type."""
+        user = self.request.user
+        if hasattr(user, "clinic_profile"):
+            return ClinicAppointmentSerializer
+        return AppointmentSerializer
+
     def get(self, request, pk):
-        appointment = self.get_object(pk, request.user.clinic_profile)
-        serializer = AppointmentSerializer(appointment)
+        appointment = self.get_object(pk)
+        serializer_class = self.get_serializer_class()
+        serializer = serializer_class(appointment)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        appointment = self.get_object(pk, request.user.clinic_profile)
-        data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
-        serializer = AppointmentSerializer(appointment, data=data)
+        appointment = self.get_object(pk)
+        serializer_class = self.get_serializer_class()
+
+        context = {}
+        if hasattr(request.user, "clinic_profile"):
+            context["clinic"] = request.user.clinic_profile
+
+        serializer = serializer_class(
+            appointment, data=request.data, context=context
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        appointment = self.get_object(pk, request.user.clinic_profile)
-        data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
-        serializer = AppointmentSerializer(appointment, data=data, partial=True)
+        appointment = self.get_object(pk)
+        serializer_class = self.get_serializer_class()
+
+        context = {}
+        if hasattr(request.user, "clinic_profile"):
+            context["clinic"] = request.user.clinic_profile
+
+        serializer = serializer_class(
+            appointment, data=request.data, partial=True, context=context
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        appointment = self.get_object(pk, request.user.clinic_profile)
+        appointment = self.get_object(pk)
         appointment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+# ------------------------------------------------Prescriptions-------------------------------------------------------------
+
+class ClinicPrescriptionListCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        clinic = request.user.clinic_profile
+        prescriptions = Prescription.objects.filter(
+            consultation__doctor__clinic=clinic
+        ).select_related("consultation", "consultation__doctor", "consultation__patient")
+
+        serializer = PrescriptionSerializer(prescriptions, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a prescription under a specific consultation belonging to this clinic."""
+        clinic = request.user.clinic_profile
+        consultation_id = request.data.get("consultation_id")
+
+        if not consultation_id:
+            return Response(
+                {"detail": "consultation_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor__clinic=clinic)
+        serializer = PrescriptionSerializer(data=request.data)
+
+        if serializer.is_valid():
+            prescription = serializer.save(consultation=consultation)
+            return Response(
+                PrescriptionSerializer(prescription).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicPrescriptionRetrieveUpdateDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk, clinic):
+        """Ensure the prescription belongs to a consultation under this clinic."""
+        return get_object_or_404(Prescription, id=pk, consultation__doctor__clinic=clinic)
+
+    def get(self, request, pk):
+        clinic = request.user.clinic_profile
+        prescription = self.get_object(pk, clinic)
+        serializer = PrescriptionSerializer(prescription)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        clinic = request.user.clinic_profile
+        prescription = self.get_object(pk, clinic)
+        serializer = PrescriptionSerializer(prescription, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        clinic = request.user.clinic_profile
+        prescription = self.get_object(pk, clinic)
+        serializer = PrescriptionSerializer(prescription, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        clinic = request.user.clinic_profile
+        prescription = self.get_object(pk, clinic)
+        prescription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

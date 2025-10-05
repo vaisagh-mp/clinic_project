@@ -167,3 +167,30 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["created_by", "appointment_id"]
 
+
+class ClinicAppointmentSerializer(serializers.ModelSerializer):
+    # Nested serializers for GET
+    clinic = ClinicSerializer(read_only=True)
+    doctor = DoctorSerializer(read_only=True)
+    patient = PatientSerializer(read_only=True)
+    created_by = serializers.StringRelatedField(read_only=True)
+
+    # Write-only fields for POST/PUT (clinic auto-assigned)
+    doctor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Doctor.objects.all(), write_only=True, source="doctor"
+    )
+    patient_id = serializers.PrimaryKeyRelatedField(
+        queryset=Patient.objects.all(), write_only=True, source="patient"
+    )
+
+    class Meta:
+        model = Appointment
+        fields = "__all__"
+        read_only_fields = ["created_by", "appointment_id", "clinic"]
+
+    def create(self, validated_data):
+        clinic = self.context.get("clinic")
+        if not clinic:
+            raise serializers.ValidationError("Clinic context is required.")
+        validated_data["clinic"] = clinic
+        return super().create(validated_data)

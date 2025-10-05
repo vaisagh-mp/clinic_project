@@ -385,11 +385,16 @@ class ClinicLabBillListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+    # Get the clinic from the logged-in user
         clinic = request.user.clinic_profile
-        serializer = LabPanelBillSerializer(data=request.data, context={'clinic': clinic})
+    
+        # Pass the request in context so serializer can access user/clinic
+        serializer = LabPanelBillSerializer(data=request.data, context={'request': request})
+    
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
