@@ -67,5 +67,6 @@ class ClinicConsultationSerializer(serializers.ModelSerializer):
         return None
 
     def get_prescriptions(self, obj):
-        prescriptions = obj.prescription_set.all()
+        prescriptions = obj.prescriptions.all()
         return ClinicPrescriptionListSerializer(prescriptions, many=True).data
+
