@@ -8,6 +8,7 @@ from .models import Consultation, Prescription
 from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer
 from .serializers import DoctorAppointmentSerializer
 from admin_panel.serializers import AppointmentSerializer
+from django.db import transaction
 
 
 class DoctorDashboardAPIView(APIView):
@@ -92,19 +93,45 @@ class ConsultationListCreateAPIView(APIView):
 
         return Response(data)
     
+    @transaction.atomic
     def post(self, request):
         doctor = request.user.doctor_profile
         patient_id = request.data.get("patient")
         appointment_id = request.data.get("appointment")
-    
+
         patient = get_object_or_404(Patient, id=patient_id, clinic=doctor.clinic)
         appointment = get_object_or_404(Appointment, id=appointment_id, doctor=doctor)
-    
+
+        # Check if consultation already exists
+        if hasattr(appointment, "consultation"):
+            return Response(
+                {"appointment": ["Consultation for this appointment already exists."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = ConsultationSerializer(data=request.data)
         if serializer.is_valid():
+            # Save consultation
             consultation = serializer.save(doctor=doctor, patient=patient, appointment=appointment)
+
+            # Update appointment status
+            appointment.status = "COMPLETED"
+            appointment.save()
+
+            # Optionally, create default Prescription if sent in request
+            prescriptions_data = request.data.get("prescriptions", [])
+            for p in prescriptions_data:
+                Prescription.objects.create(
+                    consultation=consultation,
+                    medicine_name=p.get("medicine_name"),
+                    dosage=p.get("dosage"),
+                    frequency=p.get("frequency"),
+                    duration=p.get("duration"),
+                    timings=p.get("timings"),
+                )
+
             return Response(ConsultationSerializer(consultation).data, status=status.HTTP_201_CREATED)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
