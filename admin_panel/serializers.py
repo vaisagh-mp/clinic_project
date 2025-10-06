@@ -2,6 +2,7 @@ from rest_framework import serializers
 from datetime import date
 from .models import Clinic
 from clinic_panel.models import Doctor, Patient, Appointment
+from doctor_panel.serializers import ConsultationSerializer
 from accounts.models import User
 
 # -------------------- Doctor --------------------
@@ -175,6 +176,9 @@ class ClinicAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     created_by = serializers.StringRelatedField(read_only=True)
 
+    # ✅ Include consultation details
+    consultation = ConsultationSerializer(read_only=True)
+
     # Write-only fields for POST/PUT (clinic auto-assigned)
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
@@ -185,7 +189,7 @@ class ClinicAppointmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Appointment
-        fields = "__all__"
+        fields = "__all__"  # includes consultation automatically
         read_only_fields = ["created_by", "appointment_id", "clinic"]
 
     def create(self, validated_data):
@@ -194,3 +198,4 @@ class ClinicAppointmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Clinic context is required.")
         validated_data["clinic"] = clinic
         return super().create(validated_data)
+
