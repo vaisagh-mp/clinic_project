@@ -182,23 +182,25 @@ class AppointmentListCreateAPIView(APIView):
         return AppointmentSerializer
 
     def get_queryset(self, request):
-        """Filter appointments by user type."""
+        """Filter appointments by user type and optionally by patient_id."""
         user = request.user
         patient_id = request.query_params.get("patient_id")
 
+        # --- Start with base queryset depending on role ---
         if hasattr(user, "clinic_profile"):
-            return Appointment.objects.filter(clinic=user.clinic_profile)
+            queryset = Appointment.objects.filter(clinic=user.clinic_profile)
 
         elif hasattr(user, "doctor_profile"):
-            return Appointment.objects.filter(doctor=user.doctor_profile)
+            queryset = Appointment.objects.filter(doctor=user.doctor_profile)
 
         else:
             clinic_id = request.query_params.get("clinic")
             if clinic_id:
-                return Appointment.objects.filter(clinic_id=clinic_id)
+                queryset = Appointment.objects.filter(clinic_id=clinic_id)
             else:
                 queryset = Appointment.objects.all()
-            
+
+        # --- ✅ Apply patient filter if provided ---
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
 
@@ -216,13 +218,12 @@ class AppointmentListCreateAPIView(APIView):
         data = request.data.copy()
         user = request.user
         serializer_class = self.get_serializer_class()
-    
-        context = {}  # <-- add context
+
+        context = {}
         # Auto-assign clinic for clinic panel
         if hasattr(user, "clinic_profile"):
             data["clinic_id"] = user.clinic_profile.id
-            context["clinic"] = user.clinic_profile  # <-- add this
-    
+            context["clinic"] = user.clinic_profile
         else:
             # Admin must provide clinic_id
             if "clinic_id" not in data:
@@ -230,14 +231,14 @@ class AppointmentListCreateAPIView(APIView):
                     {"detail": "clinic_id is required for appointment creation."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-    
-        serializer = serializer_class(data=data, context=context)  # <-- pass context
+
+        serializer = serializer_class(data=data, context=context)
         if serializer.is_valid():
             serializer.save(created_by=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
 
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
