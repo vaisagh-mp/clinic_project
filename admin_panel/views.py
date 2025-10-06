@@ -249,7 +249,6 @@ class AdminPatientVitalSignsAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Optional: filter by patient_id if provided
         patient_id = request.query_params.get("patient_id")
         patients = Patient.objects.all()
         if patient_id:
@@ -266,8 +265,8 @@ class AdminPatientVitalSignsAPIView(APIView):
             )
 
             vital_signs = {
-                "bloodPressure": latest_consultation.blood_pressure if latest_consultation else "N/A",
-                "heartRate": latest_consultation.heart_rate if latest_consultation else "N/A",
+                "bloodPressure": "N/A",  # field not in model
+                "heartRate": latest_consultation.pulse if latest_consultation else "N/A",
                 "spo2": latest_consultation.spo2 if latest_consultation else "N/A",
                 "temperature": latest_consultation.temperature if latest_consultation else "N/A",
                 "respiratoryRate": latest_consultation.respiratory_rate if latest_consultation else "N/A",
@@ -283,8 +282,9 @@ class AdminPatientVitalSignsAPIView(APIView):
                 "email": patient.email,
                 "phone": patient.phone_number,
                 "address": patient.address,
-                "lastVisited": latest_consultation.appointment_date if latest_consultation else "N/A",
+                "lastVisited": latest_consultation.appointment.appointment_date if latest_consultation and latest_consultation.appointment else "N/A",
                 "vitalSigns": vital_signs,
             })
 
         return Response(response_data)
+
