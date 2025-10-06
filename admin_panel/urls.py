@@ -22,4 +22,10 @@ urlpatterns = [
     # Appointments
     path("appointments/", AppointmentListCreateAPIView.as_view(), name="appointment-list-create"),
     path("appointments/<int:pk>/", AppointmentRetrieveUpdateDeleteAPIView.as_view(), name="appointment-rud"),
+
+    path(
+        "patient-vital-signs/",
+        AdminPatientVitalSignsAPIView.as_view(),
+        name="admin-patient-vital-signs",
+    ),
 ]

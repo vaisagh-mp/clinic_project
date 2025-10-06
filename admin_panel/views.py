@@ -244,3 +244,47 @@ class AppointmentRetrieveUpdateDeleteAPIView(APIView):
         appointment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+class AdminPatientVitalSignsAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Optional: filter by patient_id if provided
+        patient_id = request.query_params.get("patient_id")
+        patients = Patient.objects.all()
+        if patient_id:
+            patients = patients.filter(id=patient_id)
+
+        response_data = []
+
+        for patient in patients:
+            # Get latest consultation for this patient
+            latest_consultation = (
+                Consultation.objects.filter(patient=patient)
+                .order_by("-created_at")
+                .first()
+            )
+
+            vital_signs = {
+                "bloodPressure": latest_consultation.blood_pressure if latest_consultation else "N/A",
+                "heartRate": latest_consultation.heart_rate if latest_consultation else "N/A",
+                "spo2": latest_consultation.spo2 if latest_consultation else "N/A",
+                "temperature": latest_consultation.temperature if latest_consultation else "N/A",
+                "respiratoryRate": latest_consultation.respiratory_rate if latest_consultation else "N/A",
+                "weight": latest_consultation.weight if latest_consultation else "N/A",
+            }
+
+            response_data.append({
+                "id": patient.id,
+                "name": f"{patient.first_name} {patient.last_name}".strip(),
+                "dob": patient.dob,
+                "bloodGroup": patient.blood_group,
+                "gender": patient.gender,
+                "email": patient.email,
+                "phone": patient.phone_number,
+                "address": patient.address,
+                "lastVisited": latest_consultation.appointment_date if latest_consultation else "N/A",
+                "vitalSigns": vital_signs,
+            })
+
+        return Response(response_data)
