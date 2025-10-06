@@ -2,7 +2,6 @@ from rest_framework import serializers
 from datetime import date
 from .models import Clinic
 from clinic_panel.models import Doctor, Patient, Appointment
-from doctor_panel.serializers import ConsultationSerializer
 from accounts.models import User
 
 # -------------------- Doctor --------------------
@@ -170,12 +169,13 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
 
 class ClinicAppointmentSerializer(serializers.ModelSerializer):
+    # Nested serializers for GET
     clinic = ClinicSerializer(read_only=True)
     doctor = DoctorSerializer(read_only=True)
     patient = PatientSerializer(read_only=True)
     created_by = serializers.StringRelatedField(read_only=True)
-    consultation = serializers.SerializerMethodField()  # changed
 
+    # Write-only fields for POST/PUT (clinic auto-assigned)
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
@@ -188,15 +188,9 @@ class ClinicAppointmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["created_by", "appointment_id", "clinic"]
 
-    def get_consultation(self, obj):
-        if hasattr(obj, "consultation") and obj.consultation is not None:
-            return ConsultationSerializer(obj.consultation).data
-        return None
-
     def create(self, validated_data):
         clinic = self.context.get("clinic")
         if not clinic:
             raise serializers.ValidationError("Clinic context is required.")
         validated_data["clinic"] = clinic
         return super().create(validated_data)
-
