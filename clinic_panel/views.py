@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from .models import Doctor, Patient, Appointment
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
-from doctor_panel.serializers import PrescriptionSerializer   
+from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
 
 
@@ -333,4 +333,29 @@ class ClinicPrescriptionDetailAPIView(APIView):
             Prescription, id=pk, consultation__doctor__clinic=clinic
         )
         serializer = ClinicConsultationSerializer(prescription.consultation)
+        return Response(serializer.data)
+    
+
+class ClinicConsultationListAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if not hasattr(user, "clinic_profile"):
+            return Response(
+                {"detail": "Only clinic users can access this."}, status=403
+            )
+
+        # Fetch all consultations for patients under this clinic
+        consultations = Consultation.objects.filter(
+            doctor__clinic=user.clinic_profile
+        ).order_by("-created_at")
+
+        # Optional: filter by patient_id if provided
+        patient_id = request.query_params.get("patient_id")
+        if patient_id:
+            consultations = consultations.filter(patient_id=patient_id)
+
+        serializer = ConsultationSerializer(consultations, many=True)
         return Response(serializer.data)
