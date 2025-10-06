@@ -184,6 +184,7 @@ class AppointmentListCreateAPIView(APIView):
     def get_queryset(self, request):
         """Filter appointments by user type."""
         user = request.user
+        patient_id = request.query_params.get("patient_id")
 
         if hasattr(user, "clinic_profile"):
             return Appointment.objects.filter(clinic=user.clinic_profile)
@@ -195,7 +196,13 @@ class AppointmentListCreateAPIView(APIView):
             clinic_id = request.query_params.get("clinic")
             if clinic_id:
                 return Appointment.objects.filter(clinic_id=clinic_id)
-            return Appointment.objects.all()
+            else:
+                queryset = Appointment.objects.all()
+            
+        if patient_id:
+            queryset = queryset.filter(patient_id=patient_id)
+
+        return queryset
 
     def get(self, request):
         appointments = self.get_queryset(request).order_by(
