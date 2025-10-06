@@ -170,16 +170,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
 
 class ClinicAppointmentSerializer(serializers.ModelSerializer):
-    # Nested serializers for GET
     clinic = ClinicSerializer(read_only=True)
     doctor = DoctorSerializer(read_only=True)
     patient = PatientSerializer(read_only=True)
     created_by = serializers.StringRelatedField(read_only=True)
+    consultation = serializers.SerializerMethodField()  # changed
 
-    # ✅ Include consultation details
-    consultation = ConsultationSerializer(read_only=True)
-
-    # Write-only fields for POST/PUT (clinic auto-assigned)
     doctor_id = serializers.PrimaryKeyRelatedField(
         queryset=Doctor.objects.all(), write_only=True, source="doctor"
     )
@@ -189,8 +185,13 @@ class ClinicAppointmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Appointment
-        fields = "__all__"  # includes consultation automatically
+        fields = "__all__"
         read_only_fields = ["created_by", "appointment_id", "clinic"]
+
+    def get_consultation(self, obj):
+        if hasattr(obj, "consultation") and obj.consultation is not None:
+            return ConsultationSerializer(obj.consultation).data
+        return None
 
     def create(self, validated_data):
         clinic = self.context.get("clinic")
