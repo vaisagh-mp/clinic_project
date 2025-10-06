@@ -181,6 +181,7 @@ class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Admin: see all appointments
         appointments = Appointment.objects.all().order_by("-appointment_date", "-appointment_time")
 
         # Optional patient filter
@@ -188,46 +189,29 @@ class AppointmentListCreateAPIView(APIView):
         if patient_id:
             appointments = appointments.filter(patient_id=patient_id)
 
-        # Serialize
         serializer = AppointmentSerializer(appointments, many=True)
-
-        # Include latest consultation for vital signs
-        data = serializer.data
-        for item in data:
-            consultation = Consultation.objects.filter(patient_id=item["patient"]).order_by("-created_at").first()
-            item["vital_signs"] = {
-                "blood_pressure": consultation.temperature if consultation else "N/A",
-                "heart_rate": consultation.pulse if consultation else "N/A",
-                "spo2": consultation.spo2 if consultation else "N/A",
-                "temperature": consultation.temperature if consultation else "N/A",
-                "respiratory_rate": consultation.respiratory_rate if consultation else "N/A",
-                "weight": consultation.weight if consultation else "N/A",
-            } if consultation else {
-                "blood_pressure": "N/A",
-                "heart_rate": "N/A",
-                "spo2": "N/A",
-                "temperature": "N/A",
-                "respiratory_rate": "N/A",
-                "weight": "N/A",
-            }
-        return Response(data)
+        return Response(serializer.data)
 
     def post(self, request):
         data = request.data.copy()
 
+        # Admin must provide clinic_id
         clinic_id = data.get("clinic_id")
         if not clinic_id:
-            return Response({"detail": "clinic_id is required to create an appointment."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "clinic_id is required to create an appointment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         clinic = get_object_or_404(Clinic, id=clinic_id)
         serializer = AppointmentSerializer(data=data)
         if serializer.is_valid():
             serializer.save(
                 created_by=request.user,
-                clinic=clinic
+                clinic=clinic  # assign clinic based on clinic_id
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
