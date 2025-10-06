@@ -18,7 +18,7 @@ urlpatterns = [
     path("appointments/", AppointmentListCreateAPIView.as_view(), name="clinic-appointment-list-create"),
     path("appointments/<int:pk>/", AppointmentRetrieveUpdateDeleteAPIView.as_view(), name="clinic-appointment-detail"),
 
-    path("clinic/consultations/", ClinicConsultationListAPIView.as_view(), name="clinic-consultations"),
+    path("consultations/", ClinicConsultationListAPIView.as_view(), name="clinic-consultations"),
 
     #Prescriptions
     path("prescriptions/", ClinicPrescriptionListAPIView.as_view(), name="clinic-prescription-list"),
