@@ -6,6 +6,8 @@ from clinic_panel.models import Doctor, Patient, Appointment
 from doctor_panel.models import Consultation
 from .serializers import ClinicSerializer, DoctorSerializer, PatientSerializer, AppointmentSerializer
 from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect
+from django.urls import reverse
 
 
 # -------------------- Dashboard --------------------
@@ -13,6 +15,11 @@ class DashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+
+        if not request.user.is_authenticated:
+            login_url = reverse("accounts:login")  # uses your app_name
+            return redirect(login_url)
+        
         clinics = Clinic.objects.all()
         doctors_count = Doctor.objects.count()
         patients_count = Patient.objects.count()
@@ -34,11 +41,16 @@ class ClinicListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect(reverse("accounts:login"))
         clinics = Clinic.objects.all()
         serializer = ClinicSerializer(clinics, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        if not request.user.is_authenticated:
+            return redirect(reverse("accounts:login"))
+        
         serializer = ClinicSerializer(data=request.data)
         if serializer.is_valid():
             clinic = serializer.save()
@@ -50,11 +62,17 @@ class ClinicRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
+        if not request.user.is_authenticated:
+            return redirect(reverse("accounts:login"))
+        
         clinic = get_object_or_404(Clinic, pk=pk)
         serializer = ClinicSerializer(clinic)
         return Response(serializer.data)
 
     def put(self, request, pk):
+        if not request.user.is_authenticated:
+            return redirect(reverse("accounts:login"))
+        
         """Full update (all fields must be provided)"""
         clinic = get_object_or_404(Clinic, pk=pk)
         serializer = ClinicSerializer(clinic, data=request.data)  # full update
@@ -64,6 +82,9 @@ class ClinicRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
+        if not request.user.is_authenticated:
+            return redirect(reverse("accounts:login"))
+        
         """Partial update (only provided fields updated)"""
         clinic = get_object_or_404(Clinic, pk=pk)
         serializer = ClinicSerializer(clinic, data=request.data, partial=True)  # partial=True
