@@ -435,10 +435,9 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
-    # Computed fields
     patient = serializers.SerializerMethodField()
+    doctor_name = serializers.SerializerMethodField()  # ✅ Add this line
     items = ClinicPharmacyBillItemSerializer(many=True, required=False)
-    doctor_name = serializers.SerializerMethodField()  # <-- NEW
 
     class Meta:
         model = PharmacyBill
@@ -446,13 +445,12 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
             'id', 'bill_number',
             'clinic', 'patient_id', 'patient',
             'bill_date', 'status', 'total_amount',
-            'items',
-            'doctor_name',  # <-- NEW
+            'doctor_name',  # ✅ Include it in fields
+            'items'
         ]
         read_only_fields = ['bill_number', 'total_amount', 'clinic']
 
     def get_patient(self, obj):
-        """Return detailed patient info."""
         if obj.patient:
             return {
                 "name": f"{obj.patient.first_name} {obj.patient.last_name}".strip(),
@@ -472,10 +470,12 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         if hasattr(obj, "consultation") and obj.consultation and obj.consultation.doctor:
             return obj.consultation.doctor.name
 
-        # Case 3: if not directly linked — find latest consultation
-        
+        # Case 3: find latest consultation where doctor belongs to same clinic
         latest_consult = (
-            Consultation.objects.filter(patient=obj.patient, clinic=obj.clinic)
+            Consultation.objects.filter(
+                patient=obj.patient,
+                doctor__clinic=obj.clinic   # ✅ Correct lookup
+            )
             .select_related("doctor")
             .order_by("-created_at")
             .first()
@@ -491,15 +491,12 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         bill = PharmacyBill.objects.create(clinic=clinic, **validated_data)
 
         for item_data in items_data:
-            item_type = item_data.get('item_type')
-            quantity = item_data.get('quantity', 1)
-
             PharmacyBillItem.objects.create(
                 bill=bill,
-                item_type=item_type,
+                item_type=item_data.get('item_type'),
                 medicine=item_data.get('medicine'),
                 procedure=item_data.get('procedure'),
-                quantity=quantity,
+                quantity=item_data.get('quantity', 1),
                 unit_price=item_data.get('unit_price', 0)
             )
 
