@@ -35,7 +35,14 @@ class ClinicDashboardAPIView(APIView):
         completed_appointments = appointments.filter(status="COMPLETED").count()
         cancelled_appointments = appointments.filter(status="CANCELLED").count()
 
+        user_data = {
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+        }
+
         data = {
+            "user": user_data, 
             "clinic": clinic.name,
             "stats": {
                 "total_doctors": total_doctors,

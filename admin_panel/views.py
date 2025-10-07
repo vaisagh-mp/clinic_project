@@ -28,7 +28,14 @@ class DashboardAPIView(APIView):
 
         clinics_serializer = ClinicSerializer(clinics, many=True)
 
+        user_data = {
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+        }
+
         return Response({
+            "user": user_data,
             "clinics": clinics_serializer.data,
             "doctors_count": doctors_count,
             "patients_count": patients_count,

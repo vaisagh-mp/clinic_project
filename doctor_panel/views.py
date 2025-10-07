@@ -47,7 +47,14 @@ class DoctorDashboardAPIView(APIView):
             for appt in upcoming_appointments
         ]
 
+        user_data = {
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+        }
+
         data = {
+            "user": user_data,
             "total_consultations": total_consultations,
             "total_patients": total_patients,
             "total_prescriptions": total_prescriptions,
