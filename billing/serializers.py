@@ -4,9 +4,9 @@ from .models import (
     ClinicBill, ClinicBillItem,
     LabBill, LabBillItem,
     PharmacyBill, PharmacyBillItem, ProcedurePayment,
-    Medicine, Procedure, Clinic, Patient
+    Medicine, Procedure, Clinic, Patient,
 )
-
+from doctor_panel.models import Consultation 
 
 # -------------------- Material Purchase --------------------
 class MaterialPurchaseItemSerializer(serializers.ModelSerializer):
@@ -426,7 +426,6 @@ class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
 
 
 class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
-    # Clinic is read-only (assigned automatically)
     clinic = serializers.StringRelatedField(read_only=True)
 
     # Accept patient ID on write
@@ -436,8 +435,10 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
+    # Computed fields
     patient = serializers.SerializerMethodField()
     items = ClinicPharmacyBillItemSerializer(many=True, required=False)
+    doctor_name = serializers.SerializerMethodField()  # <-- NEW
 
     class Meta:
         model = PharmacyBill
@@ -445,40 +446,62 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
             'id', 'bill_number',
             'clinic', 'patient_id', 'patient',
             'bill_date', 'status', 'total_amount',
-            'items'
+            'items',
+            'doctor_name',  # <-- NEW
         ]
         read_only_fields = ['bill_number', 'total_amount', 'clinic']
 
     def get_patient(self, obj):
+        """Return detailed patient info."""
         if obj.patient:
-            return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+            return {
+                "name": f"{obj.patient.first_name} {obj.patient.last_name}".strip(),
+                "dob": obj.patient.dob,
+                "gender": obj.patient.get_gender_display() if obj.patient.gender else None,
+                "address": obj.patient.address,
+            }
+        return None
+
+    def get_doctor_name(self, obj):
+        """Return consulting doctor name if linked via consultation."""
+        # Case 1: if PharmacyBill directly has a doctor field
+        if hasattr(obj, "doctor") and obj.doctor:
+            return obj.doctor.name
+
+        # Case 2: if there is a related consultation object
+        if hasattr(obj, "consultation") and obj.consultation and obj.consultation.doctor:
+            return obj.consultation.doctor.name
+
+        # Case 3: if not directly linked — find latest consultation
+        
+        latest_consult = (
+            Consultation.objects.filter(patient=obj.patient, clinic=obj.clinic)
+            .select_related("doctor")
+            .order_by("-created_at")
+            .first()
+        )
+        if latest_consult and latest_consult.doctor:
+            return latest_consult.doctor.name
+
         return None
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
-        clinic = self.context['clinic']  # Clinic assigned from logged-in user
+        clinic = self.context['clinic']
         bill = PharmacyBill.objects.create(clinic=clinic, **validated_data)
 
         for item_data in items_data:
             item_type = item_data.get('item_type')
             quantity = item_data.get('quantity', 1)
 
-            if item_type == 'MEDICINE':
-                PharmacyBillItem.objects.create(
-                    bill=bill,
-                    item_type='MEDICINE',
-                    medicine=item_data.get('medicine'),
-                    quantity=quantity,
-                    unit_price=item_data.get('unit_price', 0)
-                )
-            elif item_type == 'PROCEDURE':
-                PharmacyBillItem.objects.create(
-                    bill=bill,
-                    item_type='PROCEDURE',
-                    procedure=item_data.get('procedure'),
-                    quantity=quantity,
-                    unit_price=item_data.get('unit_price', 0)
-                )
+            PharmacyBillItem.objects.create(
+                bill=bill,
+                item_type=item_type,
+                medicine=item_data.get('medicine'),
+                procedure=item_data.get('procedure'),
+                quantity=quantity,
+                unit_price=item_data.get('unit_price', 0)
+            )
 
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
@@ -487,7 +510,6 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
 
-        # Update bill fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
