@@ -314,10 +314,10 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
-    # Show names on read
-    clinic = serializers.StringRelatedField(read_only=True)   # will call Clinic.__str__()
+    # Show names and nested details on read
+    clinic = serializers.StringRelatedField(read_only=True)
     patient = serializers.SerializerMethodField()
-
+    doctor_name = serializers.SerializerMethodField()  # ✅ NEW
     items = PharmacyBillItemSerializer(many=True, required=False)
 
     class Meta:
@@ -327,13 +327,45 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
             'clinic_id', 'clinic',
             'patient_id', 'patient',
             'bill_date', 'status', 'total_amount',
+            'doctor_name',  # ✅ NEW
             'items'
         ]
         read_only_fields = ['bill_number', 'total_amount']
 
     def get_patient(self, obj):
+        """Return detailed patient info."""
         if obj.patient:
-            return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+            return {
+                "name": f"{obj.patient.first_name} {obj.patient.last_name}".strip(),
+                "dob": obj.patient.dob,
+                "gender": obj.patient.get_gender_display() if obj.patient.gender else None,
+                "address": obj.patient.address,
+            }
+        return None
+
+    def get_doctor_name(self, obj):
+        """Return consulting doctor name if linked via consultation."""
+        # Case 1: if PharmacyBill directly has a doctor field
+        if hasattr(obj, "doctor") and obj.doctor:
+            return obj.doctor.name
+
+        # Case 2: if there is a related consultation object
+        if hasattr(obj, "consultation") and obj.consultation and obj.consultation.doctor:
+            return obj.consultation.doctor.name
+
+        # Case 3: find latest consultation where doctor belongs to same clinic
+        latest_consult = (
+            Consultation.objects.filter(
+                patient=obj.patient,
+                doctor__clinic=obj.clinic  # ✅ FIXED lookup
+            )
+            .select_related("doctor")
+            .order_by("-created_at")
+            .first()
+        )
+        if latest_consult and latest_consult.doctor:
+            return latest_consult.doctor.name
+
         return None
 
     def create(self, validated_data):
@@ -344,46 +376,43 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
             item_type = item_data.get('item_type')
             quantity = item_data.get('quantity', 1)
 
-            if item_type == 'MEDICINE':
-                PharmacyBillItem.objects.create(
-                    bill=bill,
-                    item_type='MEDICINE',
-                    medicine=item_data.get('medicine'),  # ✅ already an instance
-                    quantity=quantity
-                )
-            elif item_type == 'PROCEDURE':
-                PharmacyBillItem.objects.create(
-                    bill=bill,
-                    item_type='PROCEDURE',
-                    procedure=item_data.get('procedure'),  # ✅ already an instance
-                    quantity=quantity
-                )
+            PharmacyBillItem.objects.create(
+                bill=bill,
+                item_type=item_type,
+                medicine=item_data.get('medicine'),
+                procedure=item_data.get('procedure'),
+                quantity=quantity,
+                unit_price=item_data.get('unit_price', 0)
+            )
 
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
         return bill
 
-
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
 
-        # Update bill fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
         if items_data is not None:
-            # Delete old items
             instance.items.all().delete()
-            # Add new items
             for item_data in items_data:
-                PharmacyBillItem.objects.create(bill=instance, **item_data)
+                PharmacyBillItem.objects.create(
+                    bill=instance,
+                    item_type=item_data.get('item_type'),
+                    medicine=item_data.get('medicine'),
+                    procedure=item_data.get('procedure'),
+                    quantity=item_data.get('quantity', 1),
+                    unit_price=item_data.get('unit_price', 0)
+                )
 
-            # Update total_amount
             instance.total_amount = sum(item.subtotal for item in instance.items.all())
             instance.save()
 
         return instance
+
 
 
 
