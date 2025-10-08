@@ -117,7 +117,6 @@ class DoctorSerializer(serializers.ModelSerializer):
 
         return instance
 
-    
 # -------------------- Clinic --------------------
 class ClinicSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)
