@@ -24,10 +24,9 @@ class DoctorSerializer(serializers.ModelSerializer):
     clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
     user = serializers.SerializerMethodField()
 
-    username = serializers.CharField(write_only=True, required=False)
-    password = serializers.CharField(write_only=True, required=False)
+    username = serializers.CharField(write_only=True, required=True)
+    password = serializers.CharField(write_only=True, required=True)
 
-    # Nested serializers
     educations = EducationSerializer(many=True, required=False)
     certifications = CertificationSerializer(many=True, required=False)
 
@@ -44,7 +43,7 @@ class DoctorSerializer(serializers.ModelSerializer):
         read_only_fields = ["user"]
 
     def to_internal_value(self, data):
-        """Safely parse JSON strings from frontend."""
+        """Parse JSON strings from frontend safely."""
         data = data.copy()
         for field in ["educations", "certifications"]:
             value = data.get(field)
@@ -66,51 +65,30 @@ class DoctorSerializer(serializers.ModelSerializer):
         return None
 
     def to_representation(self, instance):
-        """Customize clinic output and include nested data."""
+        """Full representation with nested objects and clinic info."""
         rep = super().to_representation(instance)
         if instance.clinic:
-            rep["clinic"] = {
-                "id": instance.clinic.id,
-                "name": instance.clinic.name,
-            }
-        # Nested data is automatically serialized by DRF
+            rep["clinic"] = {"id": instance.clinic.id, "name": instance.clinic.name}
+        rep["educations"] = EducationSerializer(instance.educations.all(), many=True).data
+        rep["certifications"] = CertificationSerializer(instance.certifications.all(), many=True).data
         return rep
 
     def create(self, validated_data):
-        username = validated_data.pop("username", None)
-        password = validated_data.pop("password", None)
-        
-        # Parse nested fields if strings
+        username = validated_data.pop("username")
+        password = validated_data.pop("password")
+
         educations_data = validated_data.pop("educations", [])
         certifications_data = validated_data.pop("certifications", [])
-    
-        # If they come as JSON strings
-        if isinstance(educations_data, str):
-            try:
-                educations_data = json.loads(educations_data)
-            except:
-                educations_data = []
-        if isinstance(certifications_data, str):
-            try:
-                certifications_data = json.loads(certifications_data)
-            except:
-                certifications_data = []
-    
-        if not username or not password:
-            raise serializers.ValidationError(
-                {"detail": "Username and password are required to create a doctor."}
-            )
-    
+
         user = User.objects.create_user(username=username, password=password, role="DOCTOR")
         doctor = Doctor.objects.create(user=user, **validated_data)
-    
-        for edu_data in educations_data or []:
-            Education.objects.create(doctor=doctor, **edu_data)
-        for cert_data in certifications_data or []:
-            Certification.objects.create(doctor=doctor, **cert_data)
-    
-        return doctor
 
+        for edu in educations_data:
+            Education.objects.create(doctor=doctor, **edu)
+        for cert in certifications_data:
+            Certification.objects.create(doctor=doctor, **cert)
+
+        return doctor
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
@@ -118,7 +96,6 @@ class DoctorSerializer(serializers.ModelSerializer):
         educations_data = validated_data.pop("educations", None)
         certifications_data = validated_data.pop("certifications", None)
 
-        # Update user credentials if given
         if instance.user:
             if username:
                 instance.user.username = username
@@ -126,21 +103,19 @@ class DoctorSerializer(serializers.ModelSerializer):
                 instance.user.set_password(password)
             instance.user.save()
 
-        # Update Doctor info
-        doctor = super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
 
-        # Optional nested update
         if educations_data is not None:
             instance.educations.all().delete()
-            for edu_data in educations_data or []:
-                Education.objects.create(doctor=instance, **edu_data)
+            for edu in educations_data:
+                Education.objects.create(doctor=instance, **edu)
 
         if certifications_data is not None:
             instance.certifications.all().delete()
-            for cert_data in certifications_data or []:
-                Certification.objects.create(doctor=instance, **cert_data)
+            for cert in certifications_data:
+                Certification.objects.create(doctor=instance, **cert)
 
-        return doctor
+        return instance
 
     
 # -------------------- Clinic --------------------
