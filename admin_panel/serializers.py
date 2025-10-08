@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import json
 from datetime import date
 from .models import Clinic
 from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification
@@ -42,6 +43,13 @@ class DoctorSerializer(serializers.ModelSerializer):
             "educations", "certifications",
         ]
         read_only_fields = ["user"]
+
+    def to_internal_value(self, data):
+        if isinstance(data.get("educations"), str):
+            data["educations"] = json.loads(data["educations"])
+        if isinstance(data.get("certifications"), str):
+            data["certifications"] = json.loads(data["certifications"])
+        return super().to_internal_value(data)
 
     def get_user(self, obj):
         if obj.user:
