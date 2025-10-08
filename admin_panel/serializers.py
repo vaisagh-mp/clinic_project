@@ -20,7 +20,6 @@ class CertificationSerializer(serializers.ModelSerializer):
         extra_kwargs = {field: {"required": False} for field in fields}
 
 
-# -------------------- Doctor --------------------
 class DoctorSerializer(serializers.ModelSerializer):
     clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
     user = serializers.SerializerMethodField()
@@ -28,7 +27,7 @@ class DoctorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(write_only=True, required=False)
 
-    # 👇 Nested serializers (optional)
+    # Nested serializers
     educations = EducationSerializer(many=True, required=False)
     certifications = CertificationSerializer(many=True, required=False)
 
@@ -45,10 +44,15 @@ class DoctorSerializer(serializers.ModelSerializer):
         read_only_fields = ["user"]
 
     def to_internal_value(self, data):
-        if isinstance(data.get("educations"), str):
-            data["educations"] = json.loads(data["educations"])
-        if isinstance(data.get("certifications"), str):
-            data["certifications"] = json.loads(data["certifications"])
+        """Safely parse JSON strings from frontend."""
+        data = data.copy()
+        for field in ["educations", "certifications"]:
+            value = data.get(field)
+            if isinstance(value, str):
+                try:
+                    data[field] = json.loads(value) if value else []
+                except json.JSONDecodeError:
+                    data[field] = []
         return super().to_internal_value(data)
 
     def get_user(self, obj):
@@ -62,13 +66,14 @@ class DoctorSerializer(serializers.ModelSerializer):
         return None
 
     def to_representation(self, instance):
-        """Customize clinic output"""
+        """Customize clinic output and include nested data."""
         rep = super().to_representation(instance)
         if instance.clinic:
             rep["clinic"] = {
                 "id": instance.clinic.id,
                 "name": instance.clinic.name,
             }
+        # Nested data is automatically serialized by DRF
         return rep
 
     def create(self, validated_data):
@@ -93,10 +98,9 @@ class DoctorSerializer(serializers.ModelSerializer):
         doctor = Doctor.objects.create(user=user, **validated_data)
 
         # Create optional related data
-        for edu_data in educations_data:
+        for edu_data in educations_data or []:
             Education.objects.create(doctor=doctor, **edu_data)
-
-        for cert_data in certifications_data:
+        for cert_data in certifications_data or []:
             Certification.objects.create(doctor=doctor, **cert_data)
 
         return doctor
@@ -118,15 +122,15 @@ class DoctorSerializer(serializers.ModelSerializer):
         # Update Doctor info
         doctor = super().update(instance, validated_data)
 
-        # ✅ Optional nested update
+        # Optional nested update
         if educations_data is not None:
             instance.educations.all().delete()
-            for edu_data in educations_data:
+            for edu_data in educations_data or []:
                 Education.objects.create(doctor=instance, **edu_data)
 
         if certifications_data is not None:
             instance.certifications.all().delete()
-            for cert_data in certifications_data:
+            for cert_data in certifications_data or []:
                 Certification.objects.create(doctor=instance, **cert_data)
 
         return doctor
