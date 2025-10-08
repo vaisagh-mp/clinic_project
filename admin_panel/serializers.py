@@ -1,19 +1,35 @@
 from rest_framework import serializers
 from datetime import date
 from .models import Clinic
-from clinic_panel.models import Doctor, Patient, Appointment
+from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification
 from accounts.models import User
+
+
+class EducationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Education
+        fields = ["id", "degree", "university", "from_year", "to_year"]
+        extra_kwargs = {field: {"required": False} for field in fields}
+
+
+class CertificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Certification
+        fields = ["id", "name", "from_year"]
+        extra_kwargs = {field: {"required": False} for field in fields}
+
 
 # -------------------- Doctor --------------------
 class DoctorSerializer(serializers.ModelSerializer):
-    # Accept clinic ID for writes
-    clinic = serializers.PrimaryKeyRelatedField(
-        queryset=Clinic.objects.all()
-    )
+    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
     user = serializers.SerializerMethodField()
 
     username = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(write_only=True, required=False)
+
+    # 👇 Nested serializers (optional)
+    educations = EducationSerializer(many=True, required=False)
+    certifications = CertificationSerializer(many=True, required=False)
 
     class Meta:
         model = Doctor
@@ -23,6 +39,7 @@ class DoctorSerializer(serializers.ModelSerializer):
             "phone_number", "email", "dob",
             "years_of_experience", "medical_license_number",
             "blood_group", "gender", "address", "specialization",
+            "educations", "certifications",
         ]
         read_only_fields = ["user"]
 
@@ -37,7 +54,7 @@ class DoctorSerializer(serializers.ModelSerializer):
         return None
 
     def to_representation(self, instance):
-        """Customize output for clinic to show {id, name} instead of just ID"""
+        """Customize clinic output"""
         rep = super().to_representation(instance)
         if instance.clinic:
             rep["clinic"] = {
@@ -49,25 +66,40 @@ class DoctorSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
+        educations_data = validated_data.pop("educations", [])
+        certifications_data = validated_data.pop("certifications", [])
 
         if not username or not password:
             raise serializers.ValidationError(
                 {"detail": "Username and password are required to create a doctor."}
             )
 
+        # Create related user
         user = User.objects.create_user(
             username=username,
             password=password,
             role="DOCTOR"
         )
-        doctor = Doctor.objects.create(user=user, **validated_data)
-        return doctor
 
+        # Create doctor
+        doctor = Doctor.objects.create(user=user, **validated_data)
+
+        # Create optional related data
+        for edu_data in educations_data:
+            Education.objects.create(doctor=doctor, **edu_data)
+
+        for cert_data in certifications_data:
+            Certification.objects.create(doctor=doctor, **cert_data)
+
+        return doctor
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
+        educations_data = validated_data.pop("educations", None)
+        certifications_data = validated_data.pop("certifications", None)
 
+        # Update user credentials if given
         if instance.user:
             if username:
                 instance.user.username = username
@@ -75,7 +107,22 @@ class DoctorSerializer(serializers.ModelSerializer):
                 instance.user.set_password(password)
             instance.user.save()
 
-        return super().update(instance, validated_data)
+        # Update Doctor info
+        doctor = super().update(instance, validated_data)
+
+        # ✅ Optional nested update
+        if educations_data is not None:
+            instance.educations.all().delete()
+            for edu_data in educations_data:
+                Education.objects.create(doctor=instance, **edu_data)
+
+        if certifications_data is not None:
+            instance.certifications.all().delete()
+            for cert_data in certifications_data:
+                Certification.objects.create(doctor=instance, **cert_data)
+
+        return doctor
+
     
 # -------------------- Clinic --------------------
 class ClinicSerializer(serializers.ModelSerializer):
