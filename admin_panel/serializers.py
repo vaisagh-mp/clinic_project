@@ -43,7 +43,6 @@ class DoctorSerializer(serializers.ModelSerializer):
         read_only_fields = ["user"]
 
     def to_internal_value(self, data):
-        """Parse JSON strings from frontend safely."""
         data = data.copy()
         for field in ["educations", "certifications"]:
             value = data.get(field)
@@ -52,6 +51,8 @@ class DoctorSerializer(serializers.ModelSerializer):
                     data[field] = json.loads(value) if value else []
                 except json.JSONDecodeError:
                     data[field] = []
+            elif value is None:
+                data[field] = []
         return super().to_internal_value(data)
 
     def get_user(self, obj):
@@ -76,7 +77,6 @@ class DoctorSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
-
         educations_data = validated_data.pop("educations", [])
         certifications_data = validated_data.pop("certifications", [])
 
@@ -84,9 +84,11 @@ class DoctorSerializer(serializers.ModelSerializer):
         doctor = Doctor.objects.create(user=user, **validated_data)
 
         for edu in educations_data:
-            Education.objects.create(doctor=doctor, **edu)
+            if edu:  # avoid empty dicts
+                Education.objects.create(doctor=doctor, **edu)
         for cert in certifications_data:
-            Certification.objects.create(doctor=doctor, **cert)
+            if cert:
+                Certification.objects.create(doctor=doctor, **cert)
 
         return doctor
 
@@ -108,14 +110,17 @@ class DoctorSerializer(serializers.ModelSerializer):
         if educations_data is not None:
             instance.educations.all().delete()
             for edu in educations_data:
-                Education.objects.create(doctor=instance, **edu)
+                if edu:
+                    Education.objects.create(doctor=instance, **edu)
 
         if certifications_data is not None:
             instance.certifications.all().delete()
             for cert in certifications_data:
-                Certification.objects.create(doctor=instance, **cert)
+                if cert:
+                    Certification.objects.create(doctor=instance, **cert)
 
         return instance
+
 
 # -------------------- Clinic --------------------
 class ClinicSerializer(serializers.ModelSerializer):
