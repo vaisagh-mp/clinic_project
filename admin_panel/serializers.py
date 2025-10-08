@@ -42,19 +42,6 @@ class DoctorSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["user"]
 
-    def to_internal_value(self, data):
-        data = data.copy()
-        for field in ["educations", "certifications"]:
-            value = data.get(field)
-            if isinstance(value, str):
-                try:
-                    data[field] = json.loads(value) if value else []
-                except json.JSONDecodeError:
-                    data[field] = []
-            elif value is None:
-                data[field] = []
-        return super().to_internal_value(data)
-
     def get_user(self, obj):
         if obj.user:
             return {
@@ -66,7 +53,6 @@ class DoctorSerializer(serializers.ModelSerializer):
         return None
 
     def to_representation(self, instance):
-        """Full representation with nested objects and clinic info."""
         rep = super().to_representation(instance)
         if instance.clinic:
             rep["clinic"] = {"id": instance.clinic.id, "name": instance.clinic.name}
@@ -75,22 +61,31 @@ class DoctorSerializer(serializers.ModelSerializer):
         return rep
 
     def create(self, validated_data):
-        username = validated_data.pop("username")
-        password = validated_data.pop("password")
+        # Parse JSON strings manually if coming from FormData
         educations_data = validated_data.pop("educations", [])
         certifications_data = validated_data.pop("certifications", [])
+
+        if isinstance(educations_data, str):
+            educations_data = json.loads(educations_data or "[]")
+        if isinstance(certifications_data, str):
+            certifications_data = json.loads(certifications_data or "[]")
+
+        username = validated_data.pop("username")
+        password = validated_data.pop("password")
 
         user = User.objects.create_user(username=username, password=password, role="DOCTOR")
         doctor = Doctor.objects.create(user=user, **validated_data)
 
         for edu in educations_data:
-            if edu:  # avoid empty dicts
+            if edu:  # skip empty dicts
                 Education.objects.create(doctor=doctor, **edu)
+
         for cert in certifications_data:
             if cert:
                 Certification.objects.create(doctor=doctor, **cert)
 
         return doctor
+
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
