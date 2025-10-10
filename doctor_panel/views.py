@@ -185,7 +185,7 @@ class DoctorAllAppointmentsAPIView(APIView):
         doctor = request.user.doctor_profile
         appointments = Appointment.objects.filter(
             doctor=doctor
-        ).select_related("patient", "doctor__clinic")
+        ).select_related("patient", "doctor__clinic").order_by("-created_at")
 
         serializer = DoctorAppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
