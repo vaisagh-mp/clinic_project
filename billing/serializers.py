@@ -260,10 +260,10 @@ class ProcedureSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'description', 'price']
 
 
-class ProcedurePaymentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProcedurePayment
-        fields = ['id', 'bill_item', 'amount_paid', 'payment_date', 'notes']
+# class ProcedurePaymentSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ProcedurePayment
+#         fields = ['id', 'bill_item', 'amount_paid', 'payment_date', 'notes']
 
 # ------------------------------------------------------------------------------------------------
 
@@ -276,14 +276,12 @@ class ProcedurePaymentSerializer(serializers.ModelSerializer):
         model = ProcedurePayment
         fields = [
             "id",
-            "bill_item",       # expects bill_item id on POST/PATCH
-            "bill_number",     # read-only
-            "procedure_name",  # read-only
             "amount_paid",
-            "payment_date",
             "notes",
+            "bill_number",      # read-only
+            "procedure_name",   # read-only
         ]
-        read_only_fields = ["payment_date", "bill_number", "procedure_name"]
+        read_only_fields = ["bill_number", "procedure_name"]
 
     def validate_bill_item(self, value):
         if value.item_type != "PROCEDURE":
@@ -443,20 +441,30 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
 # serializers.py
 
 class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
+    # Accept medicine/procedure by ID for POST/PUT
     medicine_id = serializers.PrimaryKeyRelatedField(
-        source="medicine", queryset=Medicine.objects.all(),
-        required=False, allow_null=True, write_only=True
+        source="medicine",
+        queryset=Medicine.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
     )
     procedure_id = serializers.PrimaryKeyRelatedField(
-        source="procedure", queryset=Procedure.objects.all(),
-        required=False, allow_null=True, write_only=True
+        source="procedure",
+        queryset=Procedure.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
     )
+
+    # Return full details for GET
     medicine = serializers.StringRelatedField(read_only=True)
     procedure = serializers.StringRelatedField(read_only=True)
+
     total_paid = serializers.ReadOnlyField()
     balance_due = serializers.ReadOnlyField()
 
-    # nested serializer for POST/PUT
+    # Nested procedure payments
     procedure_payments = ProcedurePaymentSerializer(many=True, required=False)
 
     class Meta:
@@ -469,7 +477,6 @@ class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
             "total_paid", "balance_due",
             "procedure_payments",
         ]
-
 
 class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
     clinic = serializers.StringRelatedField(read_only=True)
@@ -505,6 +512,10 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         return None
 
     def get_doctor_name(self, obj):
+        if hasattr(obj, "doctor") and obj.doctor:
+            return obj.doctor.name
+        if hasattr(obj, "consultation") and obj.consultation and obj.consultation.doctor:
+            return obj.consultation.doctor.name
         latest_consult = (
             Consultation.objects.filter(patient=obj.patient, doctor__clinic=obj.clinic)
             .select_related("doctor")
@@ -535,6 +546,7 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
                 unit_price=item_data.get('unit_price', 0)
             )
 
+            # Create procedure payments if this is a PROCEDURE item
             if bill_item.item_type == "PROCEDURE":
                 for payment in procedure_payments_data:
                     ProcedurePayment.objects.create(
@@ -543,6 +555,7 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
                         notes=payment.get('notes', '')
                     )
 
+        # Update total amount
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
         return bill
@@ -555,11 +568,13 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
         instance.save()
 
         if items_data is not None:
+            # Delete existing items and their procedure payments
             for item in instance.items.all():
                 if item.item_type == "PROCEDURE":
                     item.payments.all().delete()
             instance.items.all().delete()
 
+            # Create new items and payments
             for item_data in items_data:
                 procedure_payments_data = item_data.pop('procedure_payments', [])
                 bill_item = PharmacyBillItem.objects.create(
