@@ -17,55 +17,32 @@ class DashboardAPIView(APIView):
 
     def get(self, request):
         if not request.user.is_authenticated:
-            login_url = reverse("accounts:login")
-            return redirect(login_url)
+            return redirect(reverse("accounts:login"))
 
         clinics = Clinic.objects.all()
         doctors_count = Doctor.objects.count()
         patients_count = Patient.objects.count()
-        consultations_count = Consultation.objects.count()
         appointments_count = Appointment.objects.count()
 
-        # Serialize clinics
         clinics_serializer = ClinicSerializer(clinics, many=True)
 
-        # Annotate patients with appointment counts
-        patients = Patient.objects.annotate(appointments_count=Count('appointments'))
-        patients_data = [
-            {
-                "id": patient.id,
-                "name": patient.name,
-                "appointments_count": patient.appointments_count
-            } 
-            for patient in patients
-        ]
+        # Patients with appointment counts
+        patients_data = Patient.objects.annotate(appointments_count=Count('appointments')).values(
+            'id', 'name', 'appointments_count'
+        )
 
-        # Annotate doctors with appointment counts
-        doctors = Doctor.objects.annotate(appointments_count=Count('appointments'))
-        doctors_data = [
-            {
-                "id": doctor.id,
-                "name": doctor.name,
-                "appointments_count": doctor.appointments_count
-            }
-            for doctor in doctors
-        ]
-
-        user_data = {
-            "username": request.user.username,
-            "first_name": request.user.first_name,
-            "last_name": request.user.last_name,
-        }
+        # Doctors with appointment counts
+        doctors_data = Doctor.objects.annotate(appointments_count=Count('appointments')).values(
+            'id', 'name', 'appointments_count'
+        )
 
         return Response({
-            "user": user_data,
             "clinics": clinics_serializer.data,
             "doctors_count": doctors_count,
             "patients_count": patients_count,
-            "consultations_count": consultations_count,
             "appointments_count": appointments_count,
-            "patients": patients_data,  # per-patient appointment count
-            "doctors": doctors_data,    # per-doctor appointment count
+            "patients": list(patients_data),
+            "doctors": list(doctors_data),
         })
 
 # -------------------- Clinic --------------------
