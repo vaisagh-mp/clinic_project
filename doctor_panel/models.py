@@ -32,6 +32,8 @@ class Consultation(BaseModel):
     weight = models.CharField(max_length=10, blank=True, null=True)
     bmi = models.CharField(max_length=10, blank=True, null=True)
     waist = models.CharField(max_length=10, blank=True, null=True)
+    blood_pressure = models.CharField(max_length=20, blank=True, null=True)
+    heart_rate = models.CharField(max_length=10, blank=True, null=True)
 
     # Complaint, Diagnosis, Advice, Investigation
     complaints = models.TextField(blank=True, null=True)

@@ -94,8 +94,9 @@ class ConsultationSerializer(serializers.ModelSerializer):
         fields = [
             "id", "doctor", "patient", "clinic", "appointment",
             "notes", "advices", "temperature", "pulse", "respiratory_rate", "spo2",
-            "height", "weight", "bmi", "waist", "complaints", "diagnosis",
-            "investigations", "allergies", "next_consultation", "empty_stomach_required",
+            "height", "weight", "bmi", "waist", "blood_pressure", "heart_rate",
+            "complaints", "diagnosis", "investigations", "allergies",
+            "next_consultation", "empty_stomach_required",
             "prescriptions",
         ]
         extra_kwargs = {
