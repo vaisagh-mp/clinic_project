@@ -487,8 +487,8 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
     patient = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()
     items = ClinicPharmacyBillItemSerializer(many=True, required=False)
+
     paid_amount = serializers.SerializerMethodField()
-    procedure_payments = ProcedurePaymentSerializer(many=True, required=False)  # ✅ New field
 
     class Meta:
         model = PharmacyBill
@@ -498,7 +498,6 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
             'bill_date', 'status', 'total_amount', 'paid_amount',
             'doctor_name',
             'items',
-            'procedure_payments',  # include in API response
         ]
         read_only_fields = ['bill_number', 'total_amount', 'clinic']
 
@@ -533,14 +532,13 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
-        payments_data = validated_data.pop('procedure_payments', [])
 
         clinic = self.context['clinic']
         bill = PharmacyBill.objects.create(clinic=clinic, **validated_data)
 
-        # Create bill items
         for item_data in items_data:
-            PharmacyBillItem.objects.create(
+            procedure_payments_data = item_data.pop('procedure_payments', [])
+            bill_item = PharmacyBillItem.objects.create(
                 bill=bill,
                 item_type=item_data.get('item_type'),
                 medicine=item_data.get('medicine'),
@@ -549,28 +547,38 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
                 unit_price=item_data.get('unit_price', 0)
             )
 
-        # Create procedure payments
-        for payment_data in payments_data:
-            ProcedurePayment.objects.create(**payment_data)
+            # Create procedure payments if this is a PROCEDURE item
+            if bill_item.item_type == "PROCEDURE" and procedure_payments_data:
+                for payment in procedure_payments_data:
+                    ProcedurePayment.objects.create(
+                        bill_item=bill_item,
+                        amount_paid=payment.get('amount_paid', 0),
+                        notes=payment.get('notes', '')
+                    )
 
+        # Update total amount
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
         return bill
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
-        payments_data = validated_data.pop('procedure_payments', None)
 
-        # Update bill fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Update bill items
         if items_data is not None:
+            # Delete existing items and their payments
+            for item in instance.items.all():
+                if item.item_type == "PROCEDURE":
+                    item.payments.all().delete()
             instance.items.all().delete()
+
+            # Create new items and payments
             for item_data in items_data:
-                PharmacyBillItem.objects.create(
+                procedure_payments_data = item_data.pop('procedure_payments', [])
+                bill_item = PharmacyBillItem.objects.create(
                     bill=instance,
                     item_type=item_data.get('item_type'),
                     medicine=item_data.get('medicine'),
@@ -579,16 +587,16 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
                     unit_price=item_data.get('unit_price', 0)
                 )
 
-        # Update procedure payments
-        if payments_data is not None:
-            # optional: only delete payments for this bill
-            ProcedurePayment.objects.filter(bill_item__bill=instance).delete()
-            for payment_data in payments_data:
-                ProcedurePayment.objects.create(**payment_data)
+                if bill_item.item_type == "PROCEDURE" and procedure_payments_data:
+                    for payment in procedure_payments_data:
+                        ProcedurePayment.objects.create(
+                            bill_item=bill_item,
+                            amount_paid=payment.get('amount_paid', 0),
+                            notes=payment.get('notes', '')
+                        )
 
         instance.total_amount = sum(item.subtotal for item in instance.items.all())
         instance.save()
-
         return instance
 
 
