@@ -8,6 +8,7 @@ from .serializers import ClinicSerializer, DoctorSerializer, PatientSerializer, 
 from django.shortcuts import get_object_or_404
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.db.models import Count
 
 
 # -------------------- Dashboard --------------------
