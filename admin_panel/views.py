@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from django.db.models import Count
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from .models import Clinic
@@ -17,7 +18,7 @@ class DashboardAPIView(APIView):
     def get(self, request):
 
         if not request.user.is_authenticated:
-            login_url = reverse("accounts:login")  # uses your app_name
+            login_url = reverse("accounts:login")
             return redirect(login_url)
         
         clinics = Clinic.objects.all()
@@ -27,6 +28,30 @@ class DashboardAPIView(APIView):
         appointments_count = Appointment.objects.count()
 
         clinics_serializer = ClinicSerializer(clinics, many=True)
+
+        # Annotate each patient with their appointment count
+        patients = Patient.objects.annotate(appointments_count=Count('appointments'))
+        patients_data = [
+            {
+                "id": patient.id,
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "appointments_count": patient.appointments_count
+            }
+            for patient in patients
+        ]
+
+        # Annotate each doctor with their appointment count
+        doctors = Doctor.objects.annotate(bookings=Count('appointments'))
+        doctors_data = [
+            {
+                "id": doctor.id,
+                "name": doctor.name,
+                "specialization": doctor.specialization,
+                "bookings": doctor.bookings
+            }
+            for doctor in doctors
+        ]
 
         user_data = {
             "username": request.user.username,
@@ -41,6 +66,8 @@ class DashboardAPIView(APIView):
             "patients_count": patients_count,
             "consultations_count": consultations_count,
             "appointments_count": appointments_count,
+            "patients": patients_data,   # For: {patient.appointments_count}
+            "doctors": doctors_data      # For: {doctor.bookings}
         })
 
 # -------------------- Clinic --------------------
