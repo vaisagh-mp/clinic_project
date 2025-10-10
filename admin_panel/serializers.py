@@ -4,7 +4,9 @@ from datetime import date
 from .models import Clinic
 from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification
 from accounts.models import User
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 class EducationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,8 +26,8 @@ class DoctorSerializer(serializers.ModelSerializer):
     clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())
     user = serializers.SerializerMethodField()
 
-    username = serializers.CharField(write_only=True, required=True)
-    password = serializers.CharField(write_only=True, required=True)
+    username = serializers.CharField(write_only=True, required=False)  # optional on update
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)  # optional on update
 
     educations = EducationSerializer(many=True, required=False)
     certifications = CertificationSerializer(many=True, required=False)
@@ -61,33 +63,25 @@ class DoctorSerializer(serializers.ModelSerializer):
         return rep
 
     def create(self, validated_data):
-        # Parse JSON strings manually if coming from FormData
-        educations_data = validated_data.pop("educations", [])
-        certifications_data = validated_data.pop("certifications", [])
-
-        if isinstance(educations_data, str):
-            educations_data = json.loads(educations_data or "[]")
-        if isinstance(certifications_data, str):
-            certifications_data = json.loads(certifications_data or "[]")
-
+        # Only required on create
         username = validated_data.pop("username")
         password = validated_data.pop("password")
+        
+        educations_data = validated_data.pop("educations", [])
+        certifications_data = validated_data.pop("certifications", [])
 
         user = User.objects.create_user(username=username, password=password, role="DOCTOR")
         doctor = Doctor.objects.create(user=user, **validated_data)
 
         for edu in educations_data:
-            if edu:  # skip empty dicts
-                Education.objects.create(doctor=doctor, **edu)
-
+            Education.objects.create(doctor=doctor, **edu)
         for cert in certifications_data:
-            if cert:
-                Certification.objects.create(doctor=doctor, **cert)
+            Certification.objects.create(doctor=doctor, **cert)
 
         return doctor
 
-
     def update(self, instance, validated_data):
+        # Update username/password only if provided
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
         educations_data = validated_data.pop("educations", None)
@@ -102,17 +96,17 @@ class DoctorSerializer(serializers.ModelSerializer):
 
         instance = super().update(instance, validated_data)
 
+        # Update educations if provided
         if educations_data is not None:
             instance.educations.all().delete()
             for edu in educations_data:
-                if edu:
-                    Education.objects.create(doctor=instance, **edu)
+                Education.objects.create(doctor=instance, **edu)
 
+        # Update certifications if provided
         if certifications_data is not None:
             instance.certifications.all().delete()
             for cert in certifications_data:
-                if cert:
-                    Certification.objects.create(doctor=instance, **cert)
+                Certification.objects.create(doctor=instance, **cert)
 
         return instance
 
