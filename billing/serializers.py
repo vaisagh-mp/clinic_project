@@ -444,26 +444,20 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
 
 class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
     medicine_id = serializers.PrimaryKeyRelatedField(
-        source="medicine",
-        queryset=Medicine.objects.all(),
-        required=False,
-        allow_null=True,
-        write_only=True
+        source="medicine", queryset=Medicine.objects.all(),
+        required=False, allow_null=True, write_only=True
     )
     procedure_id = serializers.PrimaryKeyRelatedField(
-        source="procedure",
-        queryset=Procedure.objects.all(),
-        required=False,
-        allow_null=True,
-        write_only=True
+        source="procedure", queryset=Procedure.objects.all(),
+        required=False, allow_null=True, write_only=True
     )
     medicine = serializers.StringRelatedField(read_only=True)
     procedure = serializers.StringRelatedField(read_only=True)
     total_paid = serializers.ReadOnlyField()
     balance_due = serializers.ReadOnlyField()
 
-    # Include procedure payments nested
-    procedure_payments = ProcedurePaymentSerializer(many=True, read_only=True)
+    # nested serializer for POST/PUT
+    procedure_payments = ProcedurePaymentSerializer(many=True, required=False)
 
     class Meta:
         model = PharmacyBillItem
@@ -475,6 +469,7 @@ class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
             "total_paid", "balance_due",
             "procedure_payments",
         ]
+
 
 class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
     clinic = serializers.StringRelatedField(read_only=True)
