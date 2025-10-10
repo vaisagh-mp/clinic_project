@@ -445,10 +445,10 @@ class ClinicPharmacyBillListCreateAPIView(APIView):
         clinic = request.user.clinic_profile
         serializer = ClinicPharmacyBillSerializer(
             data=request.data,
-            context={'clinic': clinic}  # Pass clinic to serializer
+            context={'clinic': clinic}
         )
         if serializer.is_valid():
-            serializer.save()  # clinic handled in serializer
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
