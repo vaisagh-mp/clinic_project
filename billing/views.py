@@ -73,7 +73,7 @@ class MaterialPurchaseBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        bills = MaterialPurchaseBill.objects.all()
+        bills = MaterialPurchaseBill.objects.all().order_by("-created_at")
         serializer = MaterialPurchaseBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -123,7 +123,7 @@ class ClinicBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        bills = ClinicBill.objects.all()
+        bills = ClinicBill.objects.all().order_by("-created_at")
         serializer = ClinicBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -173,7 +173,7 @@ class LabBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        bills = LabBill.objects.all()
+        bills = LabBill.objects.all().order_by("-created_at")
         serializer = LabBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -223,7 +223,7 @@ class PharmacyBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        bills = PharmacyBill.objects.all()
+        bills = PharmacyBill.objects.all().order_by("-created_at")
         serializer = PharmacyBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -276,7 +276,7 @@ class ClinicMaterialPurchaseBillListCreateAPIView(APIView):
 
     def get(self, request): 
         clinic = request.user.clinic_profile
-        bills = MaterialPurchaseBill.objects.filter(clinic=clinic)
+        bills = MaterialPurchaseBill.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = MaterialPurchaseBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -328,7 +328,7 @@ class ClinicClinicBillListCreateAPIView(APIView):
 
     def get(self, request):
         clinic = request.user.clinic_profile
-        bills = ClinicBill.objects.filter(clinic=clinic)
+        bills = ClinicBill.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = ClinicPanelBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -380,7 +380,7 @@ class ClinicLabBillListCreateAPIView(APIView):
 
     def get(self, request):
         clinic = request.user.clinic_profile
-        bills = LabBill.objects.filter(clinic=clinic)
+        bills = LabBill.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = LabPanelBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -437,7 +437,7 @@ class ClinicPharmacyBillListCreateAPIView(APIView):
 
     def get(self, request):
         clinic = request.user.clinic_profile
-        bills = PharmacyBill.objects.filter(clinic=clinic)
+        bills = PharmacyBill.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = ClinicPharmacyBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -500,7 +500,7 @@ class MedicineListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        medicines = Medicine.objects.all()
+        medicines = Medicine.objects.all().order_by("-created_at")
         serializer = MedicineSerializer(medicines, many=True)
         return Response(serializer.data)
 
@@ -547,7 +547,7 @@ class ProcedureListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        procedures = Procedure.objects.all()
+        procedures = Procedure.objects.all().order_by("-created_at")
         serializer = ProcedureSerializer(procedures, many=True)
         return Response(serializer.data)
 
