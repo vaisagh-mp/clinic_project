@@ -467,13 +467,14 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
     patient = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()  # ✅ Add this line
     items = ClinicPharmacyBillItemSerializer(many=True, required=False)
+    paid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = PharmacyBill
         fields = [
             'id', 'bill_number',
             'clinic', 'patient_id', 'patient',
-            'bill_date', 'status', 'total_amount',
+            'bill_date', 'status', 'total_amount', 'paid_amount',
             'doctor_name',  # ✅ Include it in fields
             'items'
         ]
@@ -513,6 +514,10 @@ class ClinicPharmacyBillSerializer(serializers.ModelSerializer):
             return latest_consult.doctor.name
 
         return None
+    
+    def get_paid_amount(self, obj):
+        total_balance_due = sum(item.balance_due for item in obj.items.all())
+        return obj.total_amount - total_balance_due
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
