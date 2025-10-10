@@ -68,7 +68,7 @@ class DoctorListCreateAPIView(APIView):
 
     def get(self, request):
         # Filter doctors by clinic of logged-in user
-        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile)
+        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
@@ -126,7 +126,7 @@ class PatientListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        patients = Patient.objects.filter(clinic=request.user.clinic_profile)
+        patients = Patient.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
         serializer = PatientSerializer(patients, many=True)
         return Response(serializer.data)
 
@@ -210,6 +210,8 @@ class AppointmentListCreateAPIView(APIView):
         # --- ✅ Apply patient filter if provided ---
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
+            
+        queryset = queryset.order_by("-appointment_date", "-appointment_time")
 
         return queryset
 

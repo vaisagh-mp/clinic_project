@@ -74,7 +74,7 @@ class ConsultationListCreateAPIView(APIView):
         scheduled_appointments = Appointment.objects.filter(
             doctor=doctor,
             status="SCHEDULED"
-        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic")
+        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic").order_by("-appointment_date", "-appointment_time")
 
         data = []
         for a in scheduled_appointments:

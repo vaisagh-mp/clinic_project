@@ -50,7 +50,7 @@ class ClinicListCreateAPIView(APIView):
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect(reverse("accounts:login"))
-        clinics = Clinic.objects.all()
+        clinics = Clinic.objects.order_by("-created_at")
         serializer = ClinicSerializer(clinics, many=True)
         return Response(serializer.data)
 
@@ -112,7 +112,7 @@ class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        doctors = Doctor.objects.all()
+        doctors = Doctor.objects.order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
@@ -162,7 +162,7 @@ class PatientListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        patients = Patient.objects.all()
+        patients = Patient.objects.order_by("-created_at")
         serializer = PatientSerializer(patients, many=True)
         return Response(serializer.data)
 
@@ -210,7 +210,7 @@ class AppointmentListCreateAPIView(APIView):
 
     def get(self, request):
         # Admin: see all appointments
-        appointments = Appointment.objects.all().order_by("-appointment_date", "-appointment_time")
+        appointments = Appointment.objects.all().order_by("-created_at")
 
         # Optional patient filter
         patient_id = request.query_params.get("patient_id")
