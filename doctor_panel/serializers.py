@@ -98,6 +98,9 @@ class ConsultationSerializer(serializers.ModelSerializer):
             "investigations", "allergies", "next_consultation", "empty_stomach_required",
             "prescriptions",
         ]
+        extra_kwargs = {
+            "next_consultation": {"required": False, "allow_null": True},
+        }
 
     def get_clinic(self, obj):
         if hasattr(obj.doctor, "clinic"):
