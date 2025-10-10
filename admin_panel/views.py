@@ -8,7 +8,6 @@ from .serializers import ClinicSerializer, DoctorSerializer, PatientSerializer, 
 from django.shortcuts import get_object_or_404
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.db.models import Count
 
 
 # -------------------- Dashboard --------------------
@@ -16,33 +15,32 @@ class DashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.is_authenticated:
-            return redirect(reverse("accounts:login"))
 
+        if not request.user.is_authenticated:
+            login_url = reverse("accounts:login")  # uses your app_name
+            return redirect(login_url)
+        
         clinics = Clinic.objects.all()
         doctors_count = Doctor.objects.count()
         patients_count = Patient.objects.count()
+        consultations_count = Consultation.objects.count()
         appointments_count = Appointment.objects.count()
 
         clinics_serializer = ClinicSerializer(clinics, many=True)
 
-        # Patients with appointment counts
-        patients_data = Patient.objects.annotate(appointments_count=Count('appointments')).values(
-            'id', 'name', 'appointments_count'
-        )
-
-        # Doctors with appointment counts
-        doctors_data = Doctor.objects.annotate(appointments_count=Count('appointments')).values(
-            'id', 'name', 'appointments_count'
-        )
+        user_data = {
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+        }
 
         return Response({
+            "user": user_data,
             "clinics": clinics_serializer.data,
             "doctors_count": doctors_count,
             "patients_count": patients_count,
+            "consultations_count": consultations_count,
             "appointments_count": appointments_count,
-            "patients": list(patients_data),
-            "doctors": list(doctors_data),
         })
 
 # -------------------- Clinic --------------------
