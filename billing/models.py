@@ -2,7 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from clinic_panel.models import Clinic, Patient
-
+import datetime
 
 # -----------------------
 # Base Bill
@@ -19,6 +19,9 @@ class BaseBill(models.Model):
     bill_date = models.DateField(default=timezone.now)
     status = models.CharField(max_length=20, choices=BILL_STATUS, default='PENDING')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
