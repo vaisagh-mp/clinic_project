@@ -618,28 +618,48 @@ class AdminProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 # Clinic: Restricted to their own clinic
 class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ProcedurePaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user_clinic = getattr(self.request.user, "clinic_id", None)
+        user = self.request.user
+
+        # Ensure only clinic users can access
+        if user.role != "CLINIC":
+            raise PermissionDenied("Only clinic users can view procedure payments.")
+
+        # Filter based on clinic (adjust logic if clinic relation differs)
+        user_clinic = getattr(user, "clinic_id", None)
         return ProcedurePayment.objects.filter(
             bill_item__bill__clinic_id=user_clinic
         ).select_related("bill_item__bill", "bill_item__procedure")
 
     def perform_create(self, serializer):
-        user_clinic = getattr(self.request.user, "clinic_id", None)
-        bill_item = serializer.validated_data["bill_item"]
+        user = self.request.user
 
-        # Ensure bill_item belongs to the same clinic as the user
+        if user.role != "CLINIC":
+            raise PermissionDenied("Only clinic users can create payments.")
+
+        bill_item = serializer.validated_data["bill_item"]
+        user_clinic = getattr(user, "clinic_id", None)
+
+        # Ensure the bill item belongs to this clinic
         if bill_item.bill.clinic_id != user_clinic:
             raise PermissionDenied("You cannot create payments for another clinic's bills.")
+
         serializer.save()
 
 
 class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProcedurePaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user_clinic = getattr(self.request.user, "clinic_id", None)
+        user = self.request.user
+
+        if user.role != "CLINIC":
+            raise PermissionDenied("Only clinic users can access this.")
+
+        user_clinic = getattr(user, "clinic_id", None)
         return ProcedurePayment.objects.filter(
             bill_item__bill__clinic_id=user_clinic
         ).select_related("bill_item__bill", "bill_item__procedure")

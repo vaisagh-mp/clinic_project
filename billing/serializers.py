@@ -269,21 +269,31 @@ class ProcedureSerializer(serializers.ModelSerializer):
 
 
 class ProcedurePaymentSerializer(serializers.ModelSerializer):
+    # Read-only computed fields
     bill_number = serializers.CharField(source="bill_item.bill.bill_number", read_only=True)
     procedure_name = serializers.CharField(source="bill_item.procedure.name", read_only=True)
+
+    # Write-only field for linking to a bill item
+    bill_item = serializers.PrimaryKeyRelatedField(
+        queryset=PharmacyBillItem.objects.all(),
+        required=True,
+        write_only=True
+    )
 
     class Meta:
         model = ProcedurePayment
         fields = [
             "id",
+            "bill_item",       # write-only (required for POST)
             "amount_paid",
             "notes",
-            "bill_number",      # read-only
-            "procedure_name",   # read-only
+            "bill_number",     # read-only
+            "procedure_name",  # read-only
         ]
         read_only_fields = ["bill_number", "procedure_name"]
 
     def validate_bill_item(self, value):
+        # Ensure the selected bill item is a procedure
         if value.item_type != "PROCEDURE":
             raise serializers.ValidationError("Selected bill_item is not a procedure.")
         return value
