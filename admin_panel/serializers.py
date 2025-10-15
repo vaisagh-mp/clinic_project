@@ -156,17 +156,14 @@ class ClinicSerializer(serializers.ModelSerializer):
 # -------------------- Patient --------------------
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
-    clinic = serializers.SerializerMethodField(read_only=True)
-    attachment = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
         model = Patient
         fields = [
             "id", "first_name", "last_name", "email", "phone_number",
-            "dob", "age", "gender", "blood_group", "address",
-            "care_of", "clinic", "attachment"
+            "dob", "age", "gender", "blood_group", "address", "care_of", "clinic"
         ]
-        read_only_fields = ["age", "clinic"]
+        read_only_fields = ["age"]
 
     def get_age(self, obj):
         if not obj.dob:
@@ -176,26 +173,11 @@ class PatientSerializer(serializers.ModelSerializer):
             (today.month, today.day) < (obj.dob.month, obj.dob.day)
         )
 
-    def get_clinic(self, obj):
-        if obj.clinic:
-            return {
-                "id": obj.clinic.id,
-                "name": obj.clinic.name
-            }
-        return None
-
     def create(self, validated_data):
         request = self.context.get("request")
-
-        # Ensure the user has a clinic_profile
-        clinic_profile = getattr(request.user, "clinic_profile", None)
-        if not clinic_profile:
-            raise serializers.ValidationError("User does not have an associated clinic.")
-
-        validated_data["clinic"] = clinic_profile
-
+        if request and hasattr(request.user, "clinic_profile"):
+            validated_data["clinic"] = request.user.clinic_profile
         return super().create(validated_data)
-
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good
