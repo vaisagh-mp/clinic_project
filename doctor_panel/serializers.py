@@ -24,39 +24,34 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "clinic",
             "created_by",
             "has_consultation",
-            "allergies",      # new
-            "last_visited",   # new
+            "allergies",
+            "last_visited",
         ]
 
     def get_has_consultation(self, obj):
         return hasattr(obj, "consultation")
 
     def get_allergies(self, obj):
-        """Return allergies if a consultation exists."""
+        """Return allergies from consultation if available."""
         if hasattr(obj, "consultation") and obj.consultation.allergies:
             return obj.consultation.allergies
         return None
 
     def get_last_visited(self, obj):
-
+        """Return the latest consultation date for this patient."""
         if not obj.patient:
             return None
 
-        latest_completed = (
-            Appointment.objects.filter(
-                patient=obj.patient, status="COMPLETED"
-            )
-            .exclude(id=obj.id)
-            .order_by("-appointment_date")
+        latest_consultation = (
+            Consultation.objects.filter(patient=obj.patient)
+            .order_by("-created_at")
             .first()
         )
 
-        if latest_completed:
-            return latest_completed.appointment_date
+        if latest_consultation:
+            # You can return as date or formatted string
+            return latest_consultation.created_at.date().isoformat()
         return None
-
-
-
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     class Meta:
