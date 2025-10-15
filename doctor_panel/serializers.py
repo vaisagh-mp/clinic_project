@@ -9,6 +9,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     has_consultation = serializers.SerializerMethodField()
     allergies = serializers.SerializerMethodField()
     last_visited = serializers.SerializerMethodField()
+    appointment_id = serializers.SerializerMethodField()  # ✅ override to ensure correct ID
 
     class Meta:
         model = Appointment
@@ -27,6 +28,10 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "allergies",
             "last_visited",
         ]
+
+    def get_appointment_id(self, obj):
+        """Return the formatted appointment ID."""
+        return obj.appointment_id or f"APT-{obj.id}"
 
     def get_has_consultation(self, obj):
         return hasattr(obj, "consultation")
@@ -49,9 +54,9 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
         )
 
         if latest_consultation:
-            # You can return as date or formatted string
             return latest_consultation.created_at.date().isoformat()
         return None
+
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     class Meta:
