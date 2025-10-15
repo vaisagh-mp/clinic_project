@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -187,30 +188,33 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
 # -------------------- Patient --------------------
 class PatientListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request):
         patients = Patient.objects.order_by("-created_at")
-        serializer = PatientSerializer(patients, many=True)
+        serializer = PatientSerializer(patients, many=True, context={"request": request})
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = PatientSerializer(data=request.data)
+        serializer = PatientSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class PatientRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request, pk):
         patient = get_object_or_404(Patient, pk=pk)
-        serializer = PatientSerializer(patient)
+        serializer = PatientSerializer(patient, context={"request": request})
         return Response(serializer.data)
 
     def put(self, request, pk):
         patient = get_object_or_404(Patient, pk=pk)
-        serializer = PatientSerializer(patient, data=request.data)  # full update
+        serializer = PatientSerializer(patient, data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -218,7 +222,7 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
     def patch(self, request, pk):
         patient = get_object_or_404(Patient, pk=pk)
-        serializer = PatientSerializer(patient, data=request.data, partial=True)  # partial update
+        serializer = PatientSerializer(patient, data=request.data, partial=True, context={"request": request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -228,7 +232,6 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         patient = get_object_or_404(Patient, pk=pk)
         patient.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 
 # -------------------- Appointment --------------------

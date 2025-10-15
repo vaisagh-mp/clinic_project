@@ -7,6 +7,8 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
     has_consultation = serializers.SerializerMethodField()
+    allergies = serializers.SerializerMethodField()
+    last_visited = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
@@ -22,10 +24,37 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "clinic",
             "created_by",
             "has_consultation",
+            "allergies",      # new
+            "last_visited",   # new
         ]
 
     def get_has_consultation(self, obj):
         return hasattr(obj, "consultation")
+
+    def get_allergies(self, obj):
+        """Return allergies if a consultation exists."""
+        if hasattr(obj, "consultation") and obj.consultation.allergies:
+            return obj.consultation.allergies
+        return None
+
+    def get_last_visited(self, obj):
+
+        if not obj.patient:
+            return None
+
+        latest_completed = (
+            Appointment.objects.filter(
+                patient=obj.patient, status="COMPLETED"
+            )
+            .exclude(id=obj.id)
+            .order_by("-appointment_date")
+            .first()
+        )
+
+        if latest_completed:
+            return latest_completed.appointment_date
+        return None
+
 
 
 

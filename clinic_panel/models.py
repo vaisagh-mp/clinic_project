@@ -142,7 +142,7 @@ class Patient(BaseModel):
         null=True,
         help_text="Guardian / Reference person for the patient"
     )
-
+    attachment = models.FileField(upload_to='patient_files/', blank=True, null=True)
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
     
