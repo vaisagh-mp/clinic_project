@@ -72,6 +72,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["consultation"]
 
 class PrescriptionListSerializer(serializers.ModelSerializer):
+    procedure = serializers.SerializerMethodField()
     patient = serializers.SerializerMethodField()
     doctor = serializers.SerializerMethodField()
     clinic = serializers.SerializerMethodField()
@@ -79,41 +80,43 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Prescription
         fields = [
-            "id", "medicine_name", "procedure", "dosage", "frequency", "timings", "duration",
-            "consultation_id", "patient", "doctor", "clinic", "created_at"
+            "id",
+            "medicine_name",
+            "procedure",
+            "dosage",
+            "frequency",
+            "timings",
+            "duration",
+            "consultation_id",
+            "patient",
+            "doctor",
+            "clinic",
+            "created_at",
         ]
+
+    def get_procedure(self, obj):
+        return obj.procedure.name if obj.procedure else None
 
     def get_patient(self, obj):
         patient = obj.consultation.patient
-        age = None
-        if patient.dob:
-            today = date.today()
-            age = today.year - patient.dob.year - ((today.month, today.day) < (patient.dob.month, patient.dob.day))
-
         return {
             "patient_id": patient.id,
             "full_name": f"{patient.first_name} {patient.last_name}",
             "phone_number": patient.phone_number,
             "dob": patient.dob,
-            "age": age,
+            "age": patient.get_age(),
             "gender": patient.gender,
             "blood_group": patient.blood_group,
         }
 
     def get_doctor(self, obj):
-        return {
-            "id": obj.consultation.doctor.id,
-            "name": obj.consultation.doctor.name,
-        }
+        doctor = obj.consultation.doctor
+        return {"id": doctor.id, "name": doctor.name}
 
     def get_clinic(self, obj):
-        clinic = getattr(obj.consultation.doctor, "clinic", None)
-        if clinic:
-            return {
-                "id": clinic.id,
-                "name": clinic.name,
-            }
-        return None
+        clinic = obj.consultation.clinic
+        return {"id": clinic.id, "name": clinic.name}
+
 
 
 class ConsultationSerializer(serializers.ModelSerializer):
