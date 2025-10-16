@@ -128,14 +128,23 @@ class ConsultationListCreateAPIView(APIView):
             # Optionally, create default Prescription if sent in request
             prescriptions_data = request.data.get("prescriptions", [])
             for p in prescriptions_data:
-                Prescription.objects.create(
-                    consultation=consultation,
-                    medicine_name=p.get("medicine_name"),
-                    dosage=p.get("dosage"),
-                    frequency=p.get("frequency"),
-                    duration=p.get("duration"),
-                    timings=p.get("timings"),
-                )
+                medicine_name = p.get("medicine_name")
+                procedure_id = p.get("procedure")
+
+                if medicine_name:  # Medicine selected
+                    Prescription.objects.create(
+                        consultation=consultation,
+                        medicine_name=medicine_name,
+                        dosage=p.get("dosage"),
+                        frequency=p.get("frequency"),
+                        duration=p.get("duration"),
+                        timings=p.get("timings"),
+                    )
+                elif procedure_id:  # Procedure selected
+                    Prescription.objects.create(
+                        consultation=consultation,
+                        procedure_id=procedure_id,
+                    )
 
             return Response(ConsultationSerializer(consultation).data, status=status.HTTP_201_CREATED)
 

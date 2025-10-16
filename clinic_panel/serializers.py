@@ -7,14 +7,14 @@ from doctor_panel.serializers import PatientSerializer, DoctorSerializer, Clinic
 class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
     patient = serializers.SerializerMethodField()
     doctor = serializers.SerializerMethodField()
-    procedure = serializers.SerializerMethodField()  # ✅ Add this
+    procedure = serializers.SerializerMethodField()  # ✅ add this
 
     class Meta:
         model = Prescription
         fields = [
             "id",
             "medicine_name",
-            "procedure", 
+            "procedure",
             "dosage",
             "frequency",
             "timings",
@@ -22,7 +22,7 @@ class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
             "consultation_id",
             "patient",
             "doctor",
-            "created_at"
+            "created_at",
         ]
 
     def get_patient(self, obj):
@@ -34,6 +34,7 @@ class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
             )
         else:
             age = None
+
         return {
             "id": patient.id,
             "full_name": f"{patient.first_name} {patient.last_name}",
@@ -46,14 +47,14 @@ class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
 
     def get_doctor(self, obj):
         doctor = obj.consultation.doctor
-        return {
-            "id": doctor.id,
-            "name": doctor.name,
-        }
+        return {"id": doctor.id, "name": doctor.name}
 
-    def get_procedure(self, obj):
+    def get_procedure(self, obj):  # ✅ this returns readable name
         if obj.procedure:
-            return {"id": obj.procedure.id, "name": obj.procedure.name}
+            return {
+                "id": obj.procedure.id,
+                "name": obj.procedure.name,
+            }
         return None
 
 
