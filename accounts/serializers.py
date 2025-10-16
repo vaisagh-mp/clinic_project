@@ -30,19 +30,18 @@ class RegisterUserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop("confirm_password")
         password = validated_data.pop("password")
-
-        # Create user
+    
         user = User(**validated_data)
         user.set_password(password)
-
-        # Auto-set is_superuser/is_staff if role is ADMIN
-        if user.role == "ADMIN":
+    
+        # ✅ Automatically promote Superadmin/Admin
+        if user.role in ["SUPERADMIN", "ADMIN"]:
             user.is_superuser = True
             user.is_staff = True
         else:
             user.is_superuser = False
             user.is_staff = False
-
+    
         user.save()
         return user
     
