@@ -94,6 +94,12 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+    def _calculate_age(self, dob):
+        if not dob:
+            return None
+        today = date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
     def get_procedure(self, obj):
         return obj.procedure.name if obj.procedure else None
 
@@ -104,7 +110,7 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
             "full_name": f"{patient.first_name} {patient.last_name}",
             "phone_number": patient.phone_number,
             "dob": patient.dob,
-            "age": patient.get_age(),
+            "age": self._calculate_age(patient.dob),
             "gender": patient.gender,
             "blood_group": patient.blood_group,
         }
@@ -116,7 +122,6 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
     def get_clinic(self, obj):
         clinic = obj.consultation.clinic
         return {"id": clinic.id, "name": clinic.name}
-
 
 
 class ConsultationSerializer(serializers.ModelSerializer):
