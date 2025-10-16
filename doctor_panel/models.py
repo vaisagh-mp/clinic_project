@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from clinic_panel.models import Patient, Doctor, Appointment
+from billing.models import Procedure
 
 class BaseModel(models.Model):
     created_at = models.DateTimeField(default=timezone.now, editable=False)
@@ -70,11 +71,17 @@ class Prescription(BaseModel):
     ]
 
     consultation = models.ForeignKey("Consultation", on_delete=models.CASCADE, related_name="prescriptions")
-    medicine_name = models.CharField(max_length=100)
-    dosage = models.CharField(max_length=50)
-    frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES)
-    duration = models.CharField(max_length=50)
-    timings = models.CharField(max_length=20, choices=TIMING_CHOICES)
+
+    # Either medicine or procedure
+    medicine_name = models.CharField(max_length=100, blank=True, null=True)
+    procedure = models.ForeignKey(Procedure, on_delete=models.SET_NULL, blank=True, null=True)
+    dosage = models.CharField(max_length=50, blank=True, null=True)
+    frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES, blank=True, null=True)
+    duration = models.CharField(max_length=50, blank=True, null=True)
+    timings = models.CharField(max_length=20, choices=TIMING_CHOICES, blank=True, null=True)
 
     def __str__(self):
-        return f"{self.medicine_name} - {self.frequency}, {self.get_timings_display()}"
+        if self.procedure:
+            return f"{self.procedure.name}"
+        return f"{self.medicine_name} - {self.frequency}, {self.get_timings_display() if self.timings else ''}"
+

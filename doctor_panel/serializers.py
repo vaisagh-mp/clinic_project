@@ -68,7 +68,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
 class PrescriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Prescription
-        fields = ["medicine_name", "dosage", "frequency", "timings", "duration"]
+        fields = ["medicine_name", "procedure", "dosage", "frequency", "timings", "duration"]
         read_only_fields = ["consultation"]
 
 class PrescriptionListSerializer(serializers.ModelSerializer):
@@ -79,19 +79,16 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Prescription
         fields = [
-            "id", "medicine_name", "dosage", "frequency", "timings", "duration",
+            "id", "medicine_name", "procedure", "dosage", "frequency", "timings", "duration",
             "consultation_id", "patient", "doctor", "clinic", "created_at"
         ]
 
     def get_patient(self, obj):
         patient = obj.consultation.patient
-
-        # Calculate age if dob exists
+        age = None
         if patient.dob:
             today = date.today()
             age = today.year - patient.dob.year - ((today.month, today.day) < (patient.dob.month, patient.dob.day))
-        else:
-            age = None
 
         return {
             "patient_id": patient.id,
@@ -102,7 +99,7 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
             "gender": patient.gender,
             "blood_group": patient.blood_group,
         }
-    
+
     def get_doctor(self, obj):
         return {
             "id": obj.consultation.doctor.id,
