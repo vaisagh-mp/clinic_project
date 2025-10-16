@@ -120,16 +120,23 @@ class PrescriptionListSerializer(serializers.ModelSerializer):
         return {"id": doctor.id, "name": doctor.name}
 
     def get_clinic(self, obj):
-        clinic = obj.consultation.clinic
-        return {"id": clinic.id, "name": clinic.name}
-
+        # Try doctor.clinic first
+        doctor_clinic = getattr(obj.consultation.doctor, "clinic", None)
+        if doctor_clinic:
+            return {"id": doctor_clinic.id, "name": doctor_clinic.name}
+        # Optional: fallback to appointment.clinic if Appointment has a clinic
+        if obj.consultation.appointment and hasattr(obj.consultation.appointment, "clinic"):
+            appt_clinic = obj.consultation.appointment.clinic
+            if appt_clinic:
+                return {"id": appt_clinic.id, "name": appt_clinic.name}
+        return None
 
 class ConsultationSerializer(serializers.ModelSerializer):
-    prescriptions = PrescriptionSerializer(many=True, read_only=True)
+    prescriptions = PrescriptionListSerializer(many=True, read_only=True)
     patient = PatientSerializer(read_only=True)
     doctor = DoctorSerializer(read_only=True)
     clinic = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Consultation
         fields = [
@@ -140,12 +147,15 @@ class ConsultationSerializer(serializers.ModelSerializer):
             "next_consultation", "empty_stomach_required",
             "prescriptions",
         ]
-        extra_kwargs = {
-            "next_consultation": {"required": False, "allow_null": True},
-        }
 
     def get_clinic(self, obj):
-        if hasattr(obj.doctor, "clinic"):
-            return ClinicSerializer(obj.doctor.clinic).data
+        # Try doctor.clinic first
+        doctor_clinic = getattr(obj.doctor, "clinic", None)
+        if doctor_clinic:
+            return {"id": doctor_clinic.id, "name": doctor_clinic.name}
+        # Optional: fallback to appointment.clinic
+        if obj.appointment and hasattr(obj.appointment, "clinic"):
+            appt_clinic = obj.appointment.clinic
+            if appt_clinic:
+                return {"id": appt_clinic.id, "name": appt_clinic.name}
         return None
-
