@@ -7,18 +7,26 @@ from doctor_panel.serializers import PatientSerializer, DoctorSerializer, Clinic
 class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
     patient = serializers.SerializerMethodField()
     doctor = serializers.SerializerMethodField()
+    procedure = serializers.SerializerMethodField()  # ✅ Add this
 
     class Meta:
         model = Prescription
         fields = [
-            "id", "medicine_name", "dosage", "frequency", "timings", "duration",
-            "consultation_id", "patient", "doctor", "created_at"
+            "id",
+            "medicine_name",
+            "procedure", 
+            "dosage",
+            "frequency",
+            "timings",
+            "duration",
+            "consultation_id",
+            "patient",
+            "doctor",
+            "created_at"
         ]
 
     def get_patient(self, obj):
         patient = obj.consultation.patient
-
-        # Calculate age if dob exists
         if patient.dob:
             today = date.today()
             age = today.year - patient.dob.year - (
@@ -26,7 +34,6 @@ class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
             )
         else:
             age = None
-
         return {
             "id": patient.id,
             "full_name": f"{patient.first_name} {patient.last_name}",
@@ -43,6 +50,11 @@ class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
             "id": doctor.id,
             "name": doctor.name,
         }
+
+    def get_procedure(self, obj):
+        if obj.procedure:
+            return {"id": obj.procedure.id, "name": obj.procedure.name}
+        return None
 
 
 class ClinicConsultationSerializer(serializers.ModelSerializer):
