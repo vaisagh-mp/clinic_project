@@ -271,6 +271,7 @@ class ProcedureSerializer(serializers.ModelSerializer):
 class ProcedurePaymentSerializer(serializers.ModelSerializer):
     bill_number = serializers.CharField(source="bill_item.bill.bill_number", read_only=True)
     procedure_name = serializers.CharField(source="bill_item.procedure.name", read_only=True)
+    balance_due = serializers.SerializerMethodField()  # ✅ new field
 
     class Meta:
         model = ProcedurePayment
@@ -278,19 +279,31 @@ class ProcedurePaymentSerializer(serializers.ModelSerializer):
             "id",
             "amount_paid",
             "notes",
-            "bill_item",       # ✅ include it, but not required in nested create
+            "bill_item",       # include it for creation
             "bill_number",
             "procedure_name",
+            "balance_due",     # include it in the response
         ]
-        read_only_fields = ["bill_number", "procedure_name"]
+        read_only_fields = ["bill_number", "procedure_name", "balance_due"]
         extra_kwargs = {
-            "bill_item": {"required": False, "allow_null": True},  # ✅ important
+            "bill_item": {"required": False, "allow_null": True},
         }
 
     def validate_bill_item(self, value):
         if value and value.item_type != "PROCEDURE":
             raise serializers.ValidationError("Selected bill_item is not a procedure.")
         return value
+
+    def get_balance_due(self, obj):
+        """
+        Calculate the balance due dynamically for this procedure item.
+        """
+        if obj.bill_item:
+            subtotal = getattr(obj.bill_item, "subtotal", 0)
+            total_paid = getattr(obj.bill_item, "total_paid", 0)
+            return float(subtotal) - float(total_paid)
+        return None
+
     
 
 # --------------------------------------------------------------------------------------------------------
