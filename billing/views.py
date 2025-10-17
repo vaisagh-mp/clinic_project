@@ -627,8 +627,9 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
         if user.role != "CLINIC":
             raise PermissionDenied("Only clinic users can view procedure payments.")
 
-        # Filter based on clinic (adjust logic if clinic relation differs)
-        user_clinic = getattr(user, "clinic_id", None)
+        # Use clinic_profile.id for filtering
+        user_clinic = getattr(user.clinic_profile, "id", None)
+
         return ProcedurePayment.objects.filter(
             bill_item__bill__clinic_id=user_clinic
         ).select_related("bill_item__bill", "bill_item__procedure")
@@ -640,7 +641,7 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
             raise PermissionDenied("Only clinic users can create payments.")
 
         bill_item = serializer.validated_data["bill_item"]
-        user_clinic = getattr(user, "clinic_id", None)
+        user_clinic = getattr(user.clinic_profile, "id", None)
 
         # Ensure the bill item belongs to this clinic
         if bill_item.bill.clinic_id != user_clinic:
@@ -648,7 +649,7 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
 
         serializer.save()
 
-
+        
 class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProcedurePaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
