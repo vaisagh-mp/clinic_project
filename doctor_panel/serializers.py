@@ -7,7 +7,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
     has_consultation = serializers.SerializerMethodField()
-    consultation = serializers.SerializerMethodField()  # 👈 Add this line
+    consultation = serializers.SerializerMethodField()  # 👈 includes latest consultation if current is None
     allergies = serializers.SerializerMethodField()
     last_visited = serializers.SerializerMethodField()
     appointment_id = serializers.SerializerMethodField()
@@ -26,7 +26,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "clinic",
             "created_by",
             "has_consultation",
-            "consultation",  # 👈 include it here
+            "consultation",
             "allergies",
             "last_visited",
         ]
@@ -35,22 +35,38 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
         return obj.appointment_id or f"APT-{obj.id}"
 
     def get_has_consultation(self, obj):
-        return hasattr(obj, "consultation")
+        return bool(Consultation.objects.filter(appointment=obj).exists())
 
     def get_consultation(self, obj):
-        """Return consultation details if exist."""
-        if hasattr(obj, "consultation"):
+        """
+        Return consultation details:
+        - Use current appointment consultation if exists
+        - Otherwise fallback to latest consultation for the patient
+        """
+        consultation = getattr(obj, "consultation", None)
+
+        if not consultation and obj.patient:
+            # fallback to latest consultation for patient
+            consultation = (
+                Consultation.objects.filter(patient=obj.patient)
+                .order_by("-created_at")
+                .first()
+            )
+
+        if consultation:
             return {
-                "complaints": obj.consultation.complaints,
-                "diagnosis": obj.consultation.diagnosis,
-                "advices": obj.consultation.advices,
-                "investigations": obj.consultation.investigations,
-                "created_at": obj.consultation.created_at,
+                "complaints": consultation.complaints,
+                "diagnosis": consultation.diagnosis,
+                "advices": consultation.advices,
+                "investigations": consultation.investigations,
+                "created_at": consultation.created_at,
             }
         return None
 
     def get_allergies(self, obj):
-        """Return allergies from the latest consultation for this patient, if available."""
+        """
+        Return allergies from the latest consultation for this patient
+        """
         if not obj.patient:
             return None
 
