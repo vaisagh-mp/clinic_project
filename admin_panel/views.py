@@ -1,4 +1,6 @@
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count
 from rest_framework.response import Response
@@ -11,6 +13,21 @@ from django.shortcuts import get_object_or_404
 from django.shortcuts import redirect
 from django.urls import reverse
 
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_access_panels(request):
+    """
+    Returns all clinics and doctors for admin access.
+    Admin can switch between all panels without password.
+    """
+    clinics = Clinic.objects.all()
+    doctors = Doctor.objects.all()
+    return Response({
+        "clinics": ClinicSerializer(clinics, many=True).data,
+        "doctors": DoctorSerializer(doctors, many=True).data
+    })
 
 # -------------------- Dashboard --------------------
 class DashboardAPIView(APIView):

@@ -5,6 +5,8 @@ app_name = "admin_panel"
 
 urlpatterns = [
 
+    path('api/admin-access/', admin_access_panels, name='admin-access'),
+
     path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
     
     # Clinics
