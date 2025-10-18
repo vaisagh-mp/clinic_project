@@ -2,7 +2,6 @@ from rest_framework import serializers
 from .models import Consultation, Prescription
 from admin_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer, Appointment
 from datetime import date
-import json
 
 class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
@@ -41,19 +40,11 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     def get_consultation(self, obj):
         """Return consultation details if exist."""
         if hasattr(obj, "consultation"):
-            # Handle investigations safely
-            investigations = obj.consultation.investigations
-            try:
-                # Convert stringified JSON to Python object
-                investigations_data = json.loads(investigations) if isinstance(investigations, str) else investigations
-            except json.JSONDecodeError:
-                investigations_data = investigations  # fallback if not valid JSON
-
             return {
                 "complaints": obj.consultation.complaints,
                 "diagnosis": obj.consultation.diagnosis,
                 "advices": obj.consultation.advices,
-                "investigations": investigations_data,  # ✅ now properly parsed
+                "investigations": obj.consultation.investigations,
                 "created_at": obj.consultation.created_at,
             }
         return None
