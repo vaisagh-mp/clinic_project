@@ -38,39 +38,37 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
         return bool(Consultation.objects.filter(appointment=obj).exists())
 
     def get_consultation(self, obj):
-        """
-        Return consultation details:
-        - Use current appointment consultation if exists
-        - Otherwise fallback to latest consultation for the patient
-        """
         consultation = getattr(obj, "consultation", None)
-
+    
         if not consultation and obj.patient:
-            # fallback to latest consultation for patient
             consultation = (
                 Consultation.objects.filter(patient=obj.patient)
                 .order_by("-created_at")
                 .first()
             )
-
+    
         if consultation:
-            # Make sure investigations is a list of strings
+            # Convert TextField string to Python list
             investigations = consultation.investigations
-            if isinstance(investigations, str):
+            if investigations:
+                import json
                 try:
-                    import json
                     investigations = json.loads(investigations)
                 except Exception:
-                    investigations = [investigations]  # fallback to string
-
+                    # If it's not valid JSON, wrap as a list
+                    investigations = [investigations]
+            else:
+                investigations = []
+    
             return {
                 "complaints": consultation.complaints,
                 "diagnosis": consultation.diagnosis,
                 "advices": consultation.advices,
-                "investigations": investigations,  # now it's an array
+                "investigations": investigations,  # this is now always an array
                 "created_at": consultation.created_at,
             }
         return None
+
 
     def get_allergies(self, obj):
         """
