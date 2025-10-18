@@ -5,49 +5,53 @@ from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 
 from .models import Doctor, Patient, Appointment
-from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
 
+
+
 class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, clinic_id=None):  # optionally pass clinic_id for super-admins
-        user_role = request.user.role
+    def get(self, request):
+        # Make sure only CLINIC role users can access this
+        if request.user.role != "CLINIC":
+            return Response({"error": "Only clinic users can access this endpoint."}, status=403)
 
-        # Determine which clinic to fetch
-        if user_role == "CLINIC":
-            clinic = request.user.clinic_profile
-        elif user_role == "SUPER_ADMIN":
-            if not clinic_id:
-                return Response({"error": "Clinic ID is required for super-admin access."}, status=400)
-            try:
-                clinic = Clinic.objects.get(pk=clinic_id)
-            except Clinic.DoesNotExist:
-                return Response({"error": "Clinic not found."}, status=404)
-        else:
-            return Response({"error": "You do not have permission to access this endpoint."}, status=403)
+        clinic = request.user.clinic_profile  # ✅ use related_name
 
-        # Fetch doctors, patients, appointments
+        # Doctors, Patients, Appointments filtered by clinic
         doctors = Doctor.objects.filter(clinic=clinic)
         patients = Patient.objects.filter(clinic=clinic)
         appointments = Appointment.objects.filter(clinic=clinic)
 
         # Stats
-        stats = {
-            "total_doctors": doctors.count(),
-            "total_patients": patients.count(),
-            "total_appointments": appointments.count(),
-            "upcoming_appointments": appointments.filter(appointment_date__gte=now().date()).count(),
-            "completed_appointments": appointments.filter(status="COMPLETED").count(),
-            "cancelled_appointments": appointments.filter(status="CANCELLED").count(),
+        total_doctors = doctors.count()
+        total_patients = patients.count()
+        total_appointments = appointments.count()
+        upcoming_appointments = appointments.filter(appointment_date__gte=now().date()).count()
+        completed_appointments = appointments.filter(status="COMPLETED").count()
+        cancelled_appointments = appointments.filter(status="CANCELLED").count()
+
+        user_data = {
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
         }
 
         data = {
+            "user": user_data, 
             "clinic": clinic.name,
-            "stats": stats,
+            "stats": {
+                "total_doctors": total_doctors,
+                "total_patients": total_patients,
+                "total_appointments": total_appointments,
+                "upcoming_appointments": upcoming_appointments,
+                "completed_appointments": completed_appointments,
+                "cancelled_appointments": cancelled_appointments,
+            },
             "latest_doctors": DoctorSerializer(doctors.order_by("-created_at")[:5], many=True).data,
             "latest_patients": PatientSerializer(patients.order_by("-created_at")[:5], many=True).data,
             "upcoming_appointments": AppointmentSerializer(
@@ -57,7 +61,6 @@ class ClinicDashboardAPIView(APIView):
         }
 
         return Response(data)
-
 
 # -------------------- Doctor --------------------
 class DoctorListCreateAPIView(APIView):
