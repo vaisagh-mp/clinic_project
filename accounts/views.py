@@ -29,7 +29,7 @@ class RegisterUserAPIView(generics.CreateAPIView):
         # Generate password reset link
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        reset_link = f"http://localhost:5173/reset-password/{uid}/{token}/"
+        reset_link = f"http://3.110.189.17/reset-password/{uid}/{token}/"
 
         # Send welcome + reset email
         subject = "Welcome to Our Platform 🎉"
@@ -132,8 +132,10 @@ class ForgotPasswordAPIView(generics.GenericAPIView):
         # Create reset token
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        domain = get_current_site(request).domain
-        reset_link = f"http://{domain}/reset-password/{uid}/{token}/"
+
+        # Frontend reset password link
+        frontend_domain = "http://localhost:5173"  # replace with production domain in deployment
+        reset_link = f"{frontend_domain}/reset-password/{uid}/{token}/"
 
         # Send email
         send_mail(
