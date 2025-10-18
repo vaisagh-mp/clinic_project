@@ -7,6 +7,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
     has_consultation = serializers.SerializerMethodField()
+    consultation = serializers.SerializerMethodField()  # 👈 Add this line
     allergies = serializers.SerializerMethodField()
     last_visited = serializers.SerializerMethodField()
     appointment_id = serializers.SerializerMethodField()
@@ -25,6 +26,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             "clinic",
             "created_by",
             "has_consultation",
+            "consultation",  # 👈 include it here
             "allergies",
             "last_visited",
         ]
@@ -34,6 +36,18 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
 
     def get_has_consultation(self, obj):
         return hasattr(obj, "consultation")
+
+    def get_consultation(self, obj):
+        """Return consultation details if exist."""
+        if hasattr(obj, "consultation"):
+            return {
+                "complaints": obj.consultation.complaints,
+                "diagnosis": obj.consultation.diagnosis,
+                "advices": obj.consultation.advices,
+                "investigations": obj.consultation.investigations,
+                "created_at": obj.consultation.created_at,
+            }
+        return None
 
     def get_allergies(self, obj):
         """Return allergies from the latest consultation for this patient, if available."""
@@ -62,7 +76,6 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
         if latest_consultation:
             return latest_consultation.created_at.date().isoformat()
         return None
-
 
 
 class PrescriptionSerializer(serializers.ModelSerializer):
