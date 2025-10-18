@@ -134,7 +134,7 @@ class ForgotPasswordAPIView(generics.GenericAPIView):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
 
         # Frontend reset password link
-        frontend_domain = "3.110.189.17"  # replace with production domain in deployment
+        frontend_domain = "https://3.110.189.17"  # replace with production domain in deployment
         reset_link = f"{frontend_domain}/reset-password/{uid}/{token}/"
 
         # Send email
