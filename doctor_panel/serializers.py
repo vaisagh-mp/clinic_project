@@ -54,11 +54,20 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
             )
 
         if consultation:
+            # Make sure investigations is a list of strings
+            investigations = consultation.investigations
+            if isinstance(investigations, str):
+                try:
+                    import json
+                    investigations = json.loads(investigations)
+                except Exception:
+                    investigations = [investigations]  # fallback to string
+
             return {
                 "complaints": consultation.complaints,
                 "diagnosis": consultation.diagnosis,
                 "advices": consultation.advices,
-                "investigations": consultation.investigations,
+                "investigations": investigations,  # now it's an array
                 "created_at": consultation.created_at,
             }
         return None
