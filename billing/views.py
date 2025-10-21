@@ -613,7 +613,14 @@ class AdminProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             "bill_item__bill", "bill_item__procedure"
         )
 
+class PatientPharmacyBillListAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def get(self, request, patient_id):
+        # Fetch only bills for the specific patient
+        bills = PharmacyBill.objects.filter(patient_id=patient_id).order_by("-created_at")
+        serializer = PharmacyBillSerializer(bills, many=True)
+        return Response(serializer.data)
 
 # Clinic: Restricted to their own clinic
 class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):

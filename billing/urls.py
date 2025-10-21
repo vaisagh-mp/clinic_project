@@ -40,7 +40,11 @@ urlpatterns = [
     # Admin endpoints
     path("admin/procedure-payments/", AdminProcedurePaymentListCreateAPIView.as_view(), name="admin-procedure-payments"),
     path("admin/procedure-payments/<int:pk>/", AdminProcedurePaymentDetailAPIView.as_view(), name="admin-procedure-payment-detail"),
-
+    path(
+        "billing/patient/<int:patient_id>/",
+        PatientPharmacyBillListAPIView.as_view(),
+        name="patient-pharmacy-bills",
+    ),
     # Clinic endpoints
     path("clinic/procedure-payments/", ClinicProcedurePaymentListCreateAPIView.as_view(), name="clinic-procedure-payments"),
     path("clinic/procedure-payments/<int:pk>/", ClinicProcedurePaymentDetailAPIView.as_view(), name="clinic-procedure-payment-detail"),
