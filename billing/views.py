@@ -494,22 +494,33 @@ class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
         bill.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     
+def get_user_clinic(user):
+    """Get the clinic of the logged-in user (clinic user or doctor)."""
+    if hasattr(user, "clinic_profile"):
+        return user.clinic_profile
+    elif hasattr(user, "doctor") and user.doctor.clinic:
+        return user.doctor.clinic
+    return None
 
 # ----------------- Medicine CRUD -----------------
 class MedicineListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        clinic = request.user.clinic_profile  # get the clinic of logged-in user
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         medicines = Medicine.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = MedicineSerializer(medicines, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         serializer = MedicineSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(clinic=clinic)  # automatically assign clinic
+            serializer.save(clinic=clinic)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -521,22 +532,28 @@ class MedicineRetrieveUpdateDeleteAPIView(APIView):
         return get_object_or_404(Medicine, pk=pk, clinic=clinic)
 
     def get(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine, data=request.data)
         if serializer.is_valid():
-            serializer.save(clinic=clinic)  # ensure clinic remains unchanged
+            serializer.save(clinic=clinic)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine, data=request.data, partial=True)
         if serializer.is_valid():
@@ -545,7 +562,9 @@ class MedicineRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         medicine = self.get_object(pk, clinic)
         medicine.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -556,13 +575,17 @@ class ProcedureListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         procedures = Procedure.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = ProcedureSerializer(procedures, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         serializer = ProcedureSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(clinic=clinic)
@@ -577,13 +600,17 @@ class ProcedureRetrieveUpdateDeleteAPIView(APIView):
         return get_object_or_404(Procedure, pk=pk, clinic=clinic)
 
     def get(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure, data=request.data)
         if serializer.is_valid():
@@ -592,7 +619,9 @@ class ProcedureRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure, data=request.data, partial=True)
         if serializer.is_valid():
@@ -601,7 +630,9 @@ class ProcedureRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        clinic = request.user.clinic_profile
+        clinic = get_user_clinic(request.user)
+        if not clinic:
+            return Response({"detail": "This user has no clinic assigned."}, status=status.HTTP_404_NOT_FOUND)
         procedure = self.get_object(pk, clinic)
         procedure.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
