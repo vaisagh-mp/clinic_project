@@ -7,7 +7,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
     patient = PatientSerializer(read_only=True)
     clinic = ClinicSerializer(read_only=True)
     has_consultation = serializers.SerializerMethodField()
-    consultation = serializers.SerializerMethodField()  # 👈 includes latest consultation if current is None
+    consultation = serializers.SerializerMethodField()  # includes latest consultation
     allergies = serializers.SerializerMethodField()
     last_visited = serializers.SerializerMethodField()
     appointment_id = serializers.SerializerMethodField()
@@ -35,71 +35,62 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
         return obj.appointment_id or f"APT-{obj.id}"
 
     def get_has_consultation(self, obj):
-        return bool(Consultation.objects.filter(appointment=obj).exists())
+        return Consultation.objects.filter(appointment=obj).exists()
 
     def get_consultation(self, obj):
-        consultation = getattr(obj, "consultation", None)
-    
-        if not consultation and obj.patient:
-            consultation = (
-                Consultation.objects.filter(patient=obj.patient)
-                .order_by("-created_at")
-                .first()
-            )
-    
-        if consultation:
-            # Convert TextField string to Python list
-            investigations = consultation.investigations
-            if investigations:
-                import json
-                try:
-                    investigations = json.loads(investigations)
-                except Exception:
-                    # If it's not valid JSON, wrap as a list
-                    investigations = [investigations]
-            else:
-                investigations = []
-    
-            return {
-                "complaints": consultation.complaints,
-                "diagnosis": consultation.diagnosis,
-                "advices": consultation.advices,
-                "investigations": investigations,  # this is now always an array
-                "notes": consultation.notes,
-                "created_at": consultation.created_at,
-            }
-        return None
-
-
-    def get_allergies(self, obj):
-        """
-        Return allergies from the latest consultation for this patient
-        """
         if not obj.patient:
             return None
 
-        latest_consultation = (
-            Consultation.objects.filter(patient=obj.patient)
-            .order_by("-created_at")
-            .first()
-        )
-        if latest_consultation and latest_consultation.allergies:
-            return latest_consultation.allergies
+        # Get all consultations for the patient ordered by creation date descending
+        consultations = Consultation.objects.filter(patient=obj.patient).order_by("-created_at")
+        if not consultations.exists():
+            return None
+
+        # Start with the latest consultation
+        latest = consultations.first()
+
+        # Prepare fields with "carry forward" logic
+        def get_field(field_name):
+            # Return first non-empty value from latest to oldest consultation
+            for c in consultations:
+                value = getattr(c, field_name, None)
+                if value:
+                    if field_name == "investigations":
+                        # Make sure investigations is always a list
+                        import json
+                        try:
+                            return json.loads(value)
+                        except Exception:
+                            return [value]
+                    return value
+            return None
+
+        return {
+            "complaints": get_field("complaints") or "",
+            "diagnosis": get_field("diagnosis") or "",
+            "advices": get_field("advices") or "",
+            "investigations": get_field("investigations") or [],
+            "notes": get_field("notes") or "",
+            "allergies": get_field("allergies") or "",
+            "created_at": latest.created_at,
+        }
+
+    def get_allergies(self, obj):
+        # Reuse the consultation logic for consistency
+        consultation_data = self.get_consultation(obj)
+        if consultation_data:
+            return consultation_data.get("allergies", None)
         return None
 
     def get_last_visited(self, obj):
-        """Return the latest consultation date for this patient."""
         if not obj.patient:
             return None
 
-        latest_consultation = (
-            Consultation.objects.filter(patient=obj.patient)
-            .order_by("-created_at")
-            .first()
-        )
+        latest_consultation = Consultation.objects.filter(patient=obj.patient).order_by("-created_at").first()
         if latest_consultation:
             return latest_consultation.created_at.date().isoformat()
         return None
+
 
 
 class PrescriptionSerializer(serializers.ModelSerializer):
