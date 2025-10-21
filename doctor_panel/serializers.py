@@ -65,6 +65,7 @@ class DoctorAppointmentSerializer(serializers.ModelSerializer):
                 "diagnosis": consultation.diagnosis,
                 "advices": consultation.advices,
                 "investigations": investigations,  # this is now always an array
+                "notes": consultation.notes,
                 "created_at": consultation.created_at,
             }
         return None
