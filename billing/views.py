@@ -496,10 +496,12 @@ class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
     
 def get_user_clinic(user):
     """Get the clinic of the logged-in user (clinic user or doctor)."""
+    # If user is a clinic user
     if hasattr(user, "clinic_profile"):
         return user.clinic_profile
-    elif hasattr(user, "doctor") and user.doctor.clinic:
-        return user.doctor.clinic
+    # If user is a doctor
+    elif hasattr(user, "doctor_profile") and user.doctor_profile.clinic:
+        return user.doctor_profile.clinic
     return None
 
 # ----------------- Medicine CRUD -----------------
@@ -636,9 +638,7 @@ class ProcedureRetrieveUpdateDeleteAPIView(APIView):
         procedure = self.get_object(pk, clinic)
         procedure.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-
+    
 
 # Admin: Full access
 class AdminProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
