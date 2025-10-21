@@ -251,13 +251,15 @@ class LabPanelBillSerializer(serializers.ModelSerializer):
 class MedicineSerializer(serializers.ModelSerializer):
     class Meta:
         model = Medicine
-        fields = ['id', 'name', 'dosage', 'stock', 'unit_price', 'expiry_date']
-
+        fields = ['id', 'name', 'dosage', 'stock', 'unit_price', 'expiry_date', 'clinic']
+        read_only_fields = ['clinic']
 
 class ProcedureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Procedure
-        fields = ['id', 'name', 'description', 'price']
+        fields = ['id', 'name', 'description', 'price', 'clinic']
+        read_only_fields = ['clinic']
+
 
 
 # class ProcedurePaymentSerializer(serializers.ModelSerializer):

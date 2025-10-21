@@ -155,8 +155,9 @@ class LabBillItem(models.Model):
 # 4. Pharmacy - Medicines & Procedures
 # -----------------------
 class Medicine(models.Model):
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='medicines')
     name = models.CharField(max_length=200)
-    dosage = models.CharField(max_length=50, blank=True, null=True)  # e.g., "500mg"
+    dosage = models.CharField(max_length=50, blank=True, null=True)
     stock = models.PositiveIntegerField(default=0)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     expiry_date = models.DateField(blank=True, null=True)
@@ -168,6 +169,7 @@ class Medicine(models.Model):
 
 
 class Procedure(models.Model):
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='procedures')
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)

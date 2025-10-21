@@ -500,14 +500,16 @@ class MedicineListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        medicines = Medicine.objects.all().order_by("-created_at")
+        clinic = request.user.clinic_profile  # get the clinic of logged-in user
+        medicines = Medicine.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = MedicineSerializer(medicines, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        clinic = request.user.clinic_profile
         serializer = MedicineSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)  # automatically assign clinic
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -515,29 +517,36 @@ class MedicineListCreateAPIView(APIView):
 class MedicineRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_object(self, pk, clinic):
+        return get_object_or_404(Medicine, pk=pk, clinic=clinic)
+
     def get(self, request, pk):
-        medicine = get_object_or_404(Medicine, pk=pk)
+        clinic = request.user.clinic_profile
+        medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        medicine = get_object_or_404(Medicine, pk=pk)
+        clinic = request.user.clinic_profile
+        medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine, data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)  # ensure clinic remains unchanged
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        medicine = get_object_or_404(Medicine, pk=pk)
+        clinic = request.user.clinic_profile
+        medicine = self.get_object(pk, clinic)
         serializer = MedicineSerializer(medicine, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        medicine = get_object_or_404(Medicine, pk=pk)
+        clinic = request.user.clinic_profile
+        medicine = self.get_object(pk, clinic)
         medicine.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -547,14 +556,16 @@ class ProcedureListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        procedures = Procedure.objects.all().order_by("-created_at")
+        clinic = request.user.clinic_profile
+        procedures = Procedure.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = ProcedureSerializer(procedures, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        clinic = request.user.clinic_profile
         serializer = ProcedureSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -562,29 +573,36 @@ class ProcedureListCreateAPIView(APIView):
 class ProcedureRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_object(self, pk, clinic):
+        return get_object_or_404(Procedure, pk=pk, clinic=clinic)
+
     def get(self, request, pk):
-        procedure = get_object_or_404(Procedure, pk=pk)
+        clinic = request.user.clinic_profile
+        procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        procedure = get_object_or_404(Procedure, pk=pk)
+        clinic = request.user.clinic_profile
+        procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure, data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        procedure = get_object_or_404(Procedure, pk=pk)
+        clinic = request.user.clinic_profile
+        procedure = self.get_object(pk, clinic)
         serializer = ProcedureSerializer(procedure, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(clinic=clinic)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        procedure = get_object_or_404(Procedure, pk=pk)
+        clinic = request.user.clinic_profile
+        procedure = self.get_object(pk, clinic)
         procedure.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
