@@ -432,25 +432,27 @@ class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
 
 
 # -------------------- Pharmacy Bill --------------------
-class ClinicPharmacyBillListCreateAPIView(APIView):
+class PharmacyBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        clinic = request.user.clinic_profile
-        bills = PharmacyBill.objects.filter(clinic=clinic).order_by("-created_at")
-        serializer = ClinicPharmacyBillSerializer(bills, many=True)
+        # Filter by patient_id if provided
+        patient_id = request.query_params.get('patient_id')
+        bills = PharmacyBill.objects.all().order_by("-created_at")
+
+        if patient_id:
+            bills = bills.filter(patient_id=patient_id)
+
+        serializer = PharmacyBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = request.user.clinic_profile
-        serializer = ClinicPharmacyBillSerializer(
-            data=request.data,
-            context={'clinic': clinic}
-        )
+        serializer = PharmacyBillSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
