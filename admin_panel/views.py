@@ -340,12 +340,12 @@ class AdminPatientVitalSignsAPIView(APIView):
             )
 
             vital_signs = {
-                "bloodPressure": "N/A",  # field not in model
-                "heartRate": latest_consultation.pulse if latest_consultation else "N/A",
-                "spo2": latest_consultation.spo2 if latest_consultation else "N/A",
-                "temperature": latest_consultation.temperature if latest_consultation else "N/A",
-                "respiratoryRate": latest_consultation.respiratory_rate if latest_consultation else "N/A",
-                "weight": latest_consultation.weight if latest_consultation else "N/A",
+                "bloodPressure": latest_consultation.blood_pressure if latest_consultation and latest_consultation.blood_pressure else "N/A",
+                "heartRate": latest_consultation.pulse if latest_consultation and latest_consultation.pulse else "N/A",
+                "spo2": latest_consultation.spo2 if latest_consultation and latest_consultation.spo2 else "N/A",
+                "temperature": latest_consultation.temperature if latest_consultation and latest_consultation.temperature else "N/A",
+                "respiratoryRate": latest_consultation.respiratory_rate if latest_consultation and latest_consultation.respiratory_rate else "N/A",
+                "weight": latest_consultation.weight if latest_consultation and latest_consultation.weight else "N/A",
             }
 
             response_data.append({
