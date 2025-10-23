@@ -10,21 +10,26 @@ from django.conf import settings
 from rest_framework import generics, status, permissions
 from .serializers import UserSerializer, LoginSerializer, RegisterUserSerializer
 from django.contrib.auth import get_user_model
+from admin_panel.models import Clinic
 
 User = get_user_model()
 
 
 class RegisterUserAPIView(generics.CreateAPIView):
-    """
-    API endpoint to register users (Superadmin, Clinic, Doctor)
-    and send welcome + password reset email.
-    """
     queryset = User.objects.all()
     serializer_class = RegisterUserSerializer
     permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
         user = serializer.save()
+
+        # Automatically create Clinic if role is CLINIC
+        if user.role == "CLINIC":
+            Clinic.objects.create(
+                user=user,
+                name=f"{user.username} Clinic",
+                email=user.email
+            )
 
         # Generate password reset link
         uid = urlsafe_base64_encode(force_bytes(user.pk))
