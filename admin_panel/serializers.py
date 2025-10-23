@@ -62,15 +62,29 @@ class DoctorSerializer(serializers.ModelSerializer):
         rep["certifications"] = CertificationSerializer(instance.certifications.all(), many=True).data
         return rep
 
+    def validate_email(self, value):
+        """Ensure email is unique across users."""
+        # Exclude current doctor user if updating
+        doctor_id = self.instance.id if self.instance else None
+        qs = User.objects.filter(email=value)
+        if self.instance and self.instance.user:
+            qs = qs.exclude(id=self.instance.user.id)
+        if qs.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
     def create(self, validated_data):
-        # Only required on create
         username = validated_data.pop("username")
         password = validated_data.pop("password")
         
         educations_data = validated_data.pop("educations", [])
         certifications_data = validated_data.pop("certifications", [])
 
-        user = User.objects.create_user(username=username, password=password, role="DOCTOR")
+        email = validated_data.get("email")
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "A user with this email already exists."})
+
+        user = User.objects.create_user(username=username, password=password, email=email, role="DOCTOR")
         doctor = Doctor.objects.create(user=user, **validated_data)
 
         for edu in educations_data:
@@ -81,11 +95,16 @@ class DoctorSerializer(serializers.ModelSerializer):
         return doctor
 
     def update(self, instance, validated_data):
-        # Update username/password only if provided
         username = validated_data.pop("username", None)
         password = validated_data.pop("password", None)
         educations_data = validated_data.pop("educations", None)
         certifications_data = validated_data.pop("certifications", None)
+
+        email = validated_data.get("email")
+        if email and instance.user:
+            qs = User.objects.filter(email=email).exclude(id=instance.user.id)
+            if qs.exists():
+                raise serializers.ValidationError({"email": "A user with this email already exists."})
 
         if instance.user:
             if username:
@@ -96,13 +115,11 @@ class DoctorSerializer(serializers.ModelSerializer):
 
         instance = super().update(instance, validated_data)
 
-        # Update educations if provided
         if educations_data is not None:
             instance.educations.all().delete()
             for edu in educations_data:
                 Education.objects.create(doctor=instance, **edu)
 
-        # Update certifications if provided
         if certifications_data is not None:
             instance.certifications.all().delete()
             for cert in certifications_data:
@@ -126,13 +143,25 @@ class ClinicSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["user"]
 
+    def validate_email(self, value):
+        """Ensure email is unique across Users."""
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
 
+        # Ensure email is unique before creating user
+        email = validated_data.get("email")
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "A user with this email already exists."})
+
         user = User.objects.create_user(
             username=username,
             password=password,
+            email=email,
             role="CLINIC"
         )
 
