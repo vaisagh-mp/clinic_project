@@ -9,10 +9,11 @@ from .serializers import ConsultationSerializer, PrescriptionSerializer, Prescri
 from .serializers import DoctorAppointmentSerializer
 from admin_panel.serializers import AppointmentSerializer
 from django.db import transaction
-
+from clinic_project.permissions import RoleBasedPanelAccess
 
 class DoctorDashboardAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [RoleBasedPanelAccess]
+    panel_role = 'Doctor'
 
     def get(self, request):
         doctor = request.user.doctor_profile

@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
-
+from clinic_project.permissions import RoleBasedPanelAccess
 from .models import Doctor, Patient, Appointment
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
@@ -13,7 +13,8 @@ from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSer
 
 
 class ClinicDashboardAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [RoleBasedPanelAccess]
+    panel_role = 'Clinic'
 
     def get(self, request):
         # Make sure only CLINIC role users can access this

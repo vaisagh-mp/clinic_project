@@ -10,28 +10,49 @@ from clinic_panel.models import Doctor, Patient, Appointment
 from doctor_panel.models import Consultation
 from .serializers import ClinicSerializer, DoctorSerializer, PatientSerializer, AppointmentSerializer
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.contrib.auth import get_user_model
+from clinic_project.permissions import RoleBasedPanelAccess
 
 
+User = get_user_model()
 
-@api_view(['GET'])
-@permission_classes([IsAdminUser])
-def admin_access_panels(request):
-    """
-    Returns all clinics and doctors for admin access.
-    Admin can switch between all panels without password.
-    """
-    clinics = Clinic.objects.all()
-    doctors = Doctor.objects.all()
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def switch_panel(request):
+    user = request.user
+
+    if user.role.upper() != "SUPERADMIN":
+        return Response({"error": "Only Superadmin can switch panels."}, status=403)
+
+    target_id = request.data.get("target_id")
+
+    try:
+        target_user = User.objects.get(id=target_id)
+    except User.DoesNotExist:
+        return Response({"error": "Target user not found"}, status=404)
+
+    # Create a token for the superadmin, but add "acting_as" data
+    refresh = RefreshToken.for_user(user)
+    access_token = refresh.access_token
+
+    access_token["acting_as_role"] = target_user.role.lower()
+    access_token["acting_as_user_id"] = target_user.id
+
     return Response({
-        "clinics": ClinicSerializer(clinics, many=True).data,
-        "doctors": DoctorSerializer(doctors, many=True).data
+        "access": str(access_token),
+        "acting_as": target_user.role.lower(),
+        "target_name": f"{target_user.first_name} {target_user.last_name}",
+        "target_id": target_user.id
     })
 
 # -------------------- Dashboard --------------------
 class DashboardAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [RoleBasedPanelAccess]
+    panel_role = 'Superadmin'
 
     def get(self, request):
 
