@@ -56,7 +56,7 @@ def switch_panel(request):
 
 # -------------------- Dashboard --------------------
 class DashboardAPIView(APIView):
-    permission_classes = [RoleBasedPanelAccess]
+    permission_classes = [IsAuthenticated]
     panel_role = 'Superadmin'
 
     def get(self, request):

@@ -12,7 +12,7 @@ from django.db import transaction
 from clinic_project.permissions import RoleBasedPanelAccess
 
 class DoctorDashboardAPIView(APIView):
-    permission_classes = [RoleBasedPanelAccess]
+    permission_classes = [permissions.IsAuthenticated]
     panel_role = 'Doctor'
 
     def get(self, request):

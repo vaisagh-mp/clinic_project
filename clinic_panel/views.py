@@ -13,7 +13,7 @@ from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSer
 
 
 class ClinicDashboardAPIView(APIView):
-    permission_classes = [RoleBasedPanelAccess]
+    permission_classes = [permissions.IsAuthenticated]
     panel_role = 'Clinic'
 
     def get(self, request):
