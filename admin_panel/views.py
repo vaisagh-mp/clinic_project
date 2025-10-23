@@ -25,6 +25,7 @@ User = get_user_model()
 def switch_panel(request):
     user = request.user
 
+    # Only Superadmin can switch
     if user.role.upper() != "SUPERADMIN":
         return Response({"error": "Only Superadmin can switch panels."}, status=403)
 
@@ -35,17 +36,21 @@ def switch_panel(request):
     except User.DoesNotExist:
         return Response({"error": "Target user not found"}, status=404)
 
-    # Create a token for the superadmin, but add "acting_as" data
+    # Create a token for the superadmin but add acting_as data
     refresh = RefreshToken.for_user(user)
     access_token = refresh.access_token
 
     access_token["acting_as_role"] = target_user.role.lower()
     access_token["acting_as_user_id"] = target_user.id
 
+    # ✅ Build a readable target name
+    full_name = f"{target_user.first_name} {target_user.last_name}".strip()
+    target_name = full_name if full_name else target_user.username
+
     return Response({
         "access": str(access_token),
         "acting_as": target_user.role.lower(),
-        "target_name": f"{target_user.first_name} {target_user.last_name}",
+        "target_name": target_name,
         "target_id": target_user.id
     })
 
