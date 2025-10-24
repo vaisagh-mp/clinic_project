@@ -5,80 +5,90 @@ from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from clinic_project.permissions import RoleBasedPanelAccess
 from .models import Doctor, Patient, Appointment
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
 from django.contrib.auth import get_user_model
-User = get_user_model()
 
+
+User = get_user_model()
 
 class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Get token from header
-        jwt_auth = JWTAuthentication()
-        raw_token = jwt_auth.get_raw_token(request.headers.get("Authorization").split()[1])
-        validated_token = jwt_auth.get_validated_token(raw_token)
+        # 1️⃣ Determine the acting user
+        user = request.user
+        clinic = None
 
-        acting_as_role = validated_token.get("acting_as")
-        acting_as_id = validated_token.get("target_id")
+        if user.role == "CLINIC":
+            # normal clinic user
+            try:
+                clinic = user.clinic_profile
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic profile not found."}, status=404)
 
-        if acting_as_role != "clinic" or not acting_as_id:
-            return Response({"error": "Only clinic users can access this endpoint."}, status=403)
+        elif user.role == "SUPERADMIN":
+            # superadmin can access any clinic panel if they have switched
+            # check if superadmin has target clinic in JWT claims
+            token = request.headers.get("Authorization", "").split("Bearer ")[-1]
+            if not token:
+                return Response({"error": "Authorization token required."}, status=401)
 
-        # Fetch the actual clinic user
-        try:
-            clinic_user = User.objects.get(id=acting_as_id)
-            clinic = clinic_user.clinic_profile
-        except User.DoesNotExist:
-            return Response({"error": "Clinic user not found."}, status=404)
-        except Clinic.DoesNotExist:
-            return Response({"error": "Clinic profile not found."}, status=404)
+            from rest_framework_simplejwt.backends import TokenBackend
+            try:
+                payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+            except Exception:
+                return Response({"error": "Invalid token."}, status=401)
 
-        # Doctors, Patients, Appointments filtered by clinic
+            acting_as_role = payload.get("acting_as")
+            acting_as_id = payload.get("target_id")
+
+            if acting_as_role != "clinic" or not acting_as_id:
+                return Response({"error": "Superadmin must switch to a clinic first."}, status=403)
+
+            try:
+                clinic_user = User.objects.get(id=acting_as_id)
+                clinic = clinic_user.clinic_profile
+            except User.DoesNotExist:
+                return Response({"error": "Clinic user not found."}, status=404)
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic profile not found."}, status=404)
+
+        else:
+            return Response({"error": "Only clinic users or superadmin can access this endpoint."}, status=403)
+
+        # 2️⃣ Fetch data for the dashboard
         doctors = Doctor.objects.filter(clinic=clinic)
         patients = Patient.objects.filter(clinic=clinic)
         appointments = Appointment.objects.filter(clinic=clinic)
 
-        # Stats
-        total_doctors = doctors.count()
-        total_patients = patients.count()
-        total_appointments = appointments.count()
-        upcoming_appointments = appointments.filter(appointment_date__gte=now().date()).count()
-        completed_appointments = appointments.filter(status="COMPLETED").count()
-        cancelled_appointments = appointments.filter(status="CANCELLED").count()
-
-        user_data = {
-            "username": request.user.username,
-            "first_name": request.user.first_name,
-            "last_name": request.user.last_name,
-        }
-
         data = {
-            "user": user_data, 
+            "user": {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
             "clinic": clinic.name,
             "stats": {
-                "total_doctors": total_doctors,
-                "total_patients": total_patients,
-                "total_appointments": total_appointments,
-                "upcoming_appointments": upcoming_appointments,
-                "completed_appointments": completed_appointments,
-                "cancelled_appointments": cancelled_appointments,
+                "total_doctors": doctors.count(),
+                "total_patients": patients.count(),
+                "total_appointments": appointments.count(),
+                "upcoming_appointments": appointments.filter(appointment_date__gte=now().date()).count(),
+                "completed_appointments": appointments.filter(status="COMPLETED").count(),
+                "cancelled_appointments": appointments.filter(status="CANCELLED").count(),
             },
             "latest_doctors": DoctorSerializer(doctors.order_by("-created_at")[:5], many=True).data,
             "latest_patients": PatientSerializer(patients.order_by("-created_at")[:5], many=True).data,
             "upcoming_appointments": AppointmentSerializer(
-                appointments.filter(appointment_date__gte=now().date()).order_by("appointment_date")[:5], 
+                appointments.filter(appointment_date__gte=now().date()).order_by("appointment_date")[:5],
                 many=True
             ).data,
         }
 
         return Response(data)
-
 # -------------------- Doctor --------------------
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
