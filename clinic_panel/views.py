@@ -5,6 +5,7 @@ from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from clinic_project.permissions import RoleBasedPanelAccess
 from .models import Doctor, Patient, Appointment
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
@@ -16,12 +17,15 @@ User = get_user_model()
 
 class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    panel_role = 'Clinic'
 
     def get(self, request):
-        # Check if JWT has acting_as
-        acting_as_role = getattr(request.user, "acting_as_role", None)
-        acting_as_id = getattr(request.user, "acting_as_user_id", None)
+        # Get token from header
+        jwt_auth = JWTAuthentication()
+        raw_token = jwt_auth.get_raw_token(request.headers.get("Authorization").split()[1])
+        validated_token = jwt_auth.get_validated_token(raw_token)
+
+        acting_as_role = validated_token.get("acting_as")
+        acting_as_id = validated_token.get("target_id")
 
         if acting_as_role != "clinic" or not acting_as_id:
             return Response({"error": "Only clinic users can access this endpoint."}, status=403)
