@@ -5,11 +5,13 @@ from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from clinic_project.permissions import RoleBasedPanelAccess
 from .models import Doctor, Patient, Appointment
+from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
-
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
 class ClinicDashboardAPIView(APIView):
@@ -17,11 +19,21 @@ class ClinicDashboardAPIView(APIView):
     panel_role = 'Clinic'
 
     def get(self, request):
-        # Make sure only CLINIC role users can access this
-        if request.user.role != "CLINIC":
+        # Check if JWT has acting_as
+        acting_as_role = getattr(request.user, "acting_as_role", None)
+        acting_as_id = getattr(request.user, "acting_as_user_id", None)
+
+        if acting_as_role != "clinic" or not acting_as_id:
             return Response({"error": "Only clinic users can access this endpoint."}, status=403)
 
-        clinic = request.user.clinic_profile  # ✅ use related_name
+        # Fetch the actual clinic user
+        try:
+            clinic_user = User.objects.get(id=acting_as_id)
+            clinic = clinic_user.clinic_profile
+        except User.DoesNotExist:
+            return Response({"error": "Clinic user not found."}, status=404)
+        except Clinic.DoesNotExist:
+            return Response({"error": "Clinic profile not found."}, status=404)
 
         # Doctors, Patients, Appointments filtered by clinic
         doctors = Doctor.objects.filter(clinic=clinic)
