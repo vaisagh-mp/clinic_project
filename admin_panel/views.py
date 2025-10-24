@@ -20,6 +20,31 @@ from clinic_project.permissions import RoleBasedPanelAccess
 
 User = get_user_model()
 
+class SwitchableUsersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Only superadmin can get list
+        if request.user.role != "superadmin":
+            return Response({"error": "Unauthorized"}, status=403)
+
+        # Fetch clinics and doctors
+        users = User.objects.filter(role__in=["clinic", "doctor"]).values(
+            "id", "username", "role", "first_name", "last_name"
+        )
+
+        # Optional: add full_name
+        users_list = [
+            {
+                "id": u["id"],
+                "role": u["role"],
+                "name": f"{u['first_name']} {u['last_name']}" if u["first_name"] else u["username"]
+            }
+            for u in users
+        ]
+
+        return Response({"users": users_list})
+    
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def switch_panel(request):

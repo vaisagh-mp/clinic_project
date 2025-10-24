@@ -6,7 +6,11 @@ app_name = "admin_panel"
 urlpatterns = [
 
     path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
+
+    path('switchable-users/', SwitchableUsersView.as_view(), name='switchable-users'),
+
     path('switch-panel/', switch_panel, name='switch_panel'),
+    
     # Clinics
     path("clinics/", ClinicListCreateAPIView.as_view(), name="clinic-list-create"),
     path("clinics/<int:pk>/", ClinicRetrieveUpdateDeleteAPIView.as_view(), name="clinic-rud"),
