@@ -11,6 +11,7 @@ from admin_panel.serializers import DoctorSerializer, PatientSerializer, Appoint
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.backends import TokenBackend
 
 
 User = get_user_model()
@@ -19,48 +20,54 @@ class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # 1️⃣ Determine the acting user
         user = request.user
         clinic = None
 
+        # Case 1: Normal clinic user
         if user.role == "CLINIC":
-            # normal clinic user
             try:
                 clinic = user.clinic_profile
             except Clinic.DoesNotExist:
                 return Response({"error": "Clinic profile not found."}, status=404)
 
+        # Case 2: Superadmin
         elif user.role == "SUPERADMIN":
-            # superadmin can access any clinic panel if they have switched
-            # check if superadmin has target clinic in JWT claims
-            token = request.headers.get("Authorization", "").split("Bearer ")[-1]
-            if not token:
-                return Response({"error": "Authorization token required."}, status=401)
+            # Try to get acting clinic from JWT (if switched)
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
 
-            from rest_framework_simplejwt.backends import TokenBackend
-            try:
-                payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-            except Exception:
-                return Response({"error": "Invalid token."}, status=401)
+            acting_as_role = None
+            acting_as_id = None
 
-            acting_as_role = payload.get("acting_as")
-            acting_as_id = payload.get("target_id")
+            if token:
+                try:
+                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    acting_as_role = payload.get("acting_as")
+                    acting_as_id = payload.get("target_id")
+                except Exception:
+                    pass  # ignore decoding errors
 
-            if acting_as_role != "clinic" or not acting_as_id:
-                return Response({"error": "Superadmin must switch to a clinic first."}, status=403)
-
-            try:
-                clinic_user = User.objects.get(id=acting_as_id)
-                clinic = clinic_user.clinic_profile
-            except User.DoesNotExist:
-                return Response({"error": "Clinic user not found."}, status=404)
-            except Clinic.DoesNotExist:
-                return Response({"error": "Clinic profile not found."}, status=404)
+            if acting_as_role == "clinic" and acting_as_id:
+                try:
+                    clinic_user = User.objects.get(id=acting_as_id)
+                    clinic = clinic_user.clinic_profile
+                except User.DoesNotExist:
+                    return Response({"error": "Clinic user not found."}, status=404)
+                except Clinic.DoesNotExist:
+                    return Response({"error": "Clinic profile not found."}, status=404)
+            else:
+                # No switch: fallback to first clinic in DB
+                clinic = Clinic.objects.first()
+                if not clinic:
+                    return Response({"error": "No clinic available to access."}, status=404)
 
         else:
-            return Response({"error": "Only clinic users or superadmin can access this endpoint."}, status=403)
+            return Response(
+                {"error": "Only clinic users or superadmin can access this endpoint."},
+                status=403
+            )
 
-        # 2️⃣ Fetch data for the dashboard
+        # --- Fetch dashboard data ---
         doctors = Doctor.objects.filter(clinic=clinic)
         patients = Patient.objects.filter(clinic=clinic)
         appointments = Appointment.objects.filter(clinic=clinic)
