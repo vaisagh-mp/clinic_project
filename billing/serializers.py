@@ -311,28 +311,21 @@ class ProcedurePaymentSerializer(serializers.ModelSerializer):
 # --------------------------------------------------------------------------------------------------------
 
 class PharmacyBillItemSerializer(serializers.ModelSerializer):
-    # Accept medicine/procedure by ID for POST/PUT
     medicine_id = serializers.PrimaryKeyRelatedField(
-        source="medicine",
-        queryset=Medicine.objects.all(),
-        required=False,
-        allow_null=True,
-        write_only=True
+        source="medicine", queryset=Medicine.objects.all(),
+        required=False, allow_null=True, write_only=True
     )
     procedure_id = serializers.PrimaryKeyRelatedField(
-        source="procedure",
-        queryset=Procedure.objects.all(),
-        required=False,
-        allow_null=True,
-        write_only=True
+        source="procedure", queryset=Procedure.objects.all(),
+        required=False, allow_null=True, write_only=True
     )
 
-    # Return full details for GET
-    medicine = serializers.StringRelatedField(read_only=True)  # will call __str__()
+    medicine = serializers.StringRelatedField(read_only=True)
     procedure = serializers.StringRelatedField(read_only=True)
 
     total_paid = serializers.ReadOnlyField()
     balance_due = serializers.ReadOnlyField()
+    procedure_payments = ProcedurePaymentSerializer(many=True, required=False)
 
     class Meta:
         model = PharmacyBillItem
@@ -341,27 +334,24 @@ class PharmacyBillItemSerializer(serializers.ModelSerializer):
             "medicine_id", "medicine",
             "procedure_id", "procedure",
             "quantity", "unit_price", "subtotal",
-            "total_paid", "balance_due"
+            "total_paid", "balance_due",
+            "procedure_payments",
         ]
 
+
 class PharmacyBillSerializer(serializers.ModelSerializer):
-    # Accept IDs on write
     clinic_id = serializers.PrimaryKeyRelatedField(
-        source="clinic",
-        queryset=Clinic.objects.all(),
-        write_only=True
+        source="clinic", queryset=Clinic.objects.all(), write_only=True
     )
     patient_id = serializers.PrimaryKeyRelatedField(
-        source="patient",
-        queryset=Patient.objects.all(),
-        write_only=True
+        source="patient", queryset=Patient.objects.all(), write_only=True
     )
 
-    # Show names and nested details on read
     clinic = serializers.StringRelatedField(read_only=True)
     patient = serializers.SerializerMethodField()
-    doctor_name = serializers.SerializerMethodField()  # ✅ NEW
+    doctor_name = serializers.SerializerMethodField()
     items = PharmacyBillItemSerializer(many=True, required=False)
+    paid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = PharmacyBill
@@ -369,14 +359,13 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
             'id', 'bill_number',
             'clinic_id', 'clinic',
             'patient_id', 'patient',
-            'bill_date', 'status', 'total_amount',
-            'doctor_name',  # ✅ NEW
-            'items'
+            'bill_date', 'status',
+            'total_amount', 'paid_amount',
+            'doctor_name', 'items'
         ]
         read_only_fields = ['bill_number', 'total_amount']
 
     def get_patient(self, obj):
-        """Return detailed patient info."""
         if obj.patient:
             return {
                 "name": f"{obj.patient.first_name} {obj.patient.last_name}".strip(),
@@ -387,20 +376,14 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
         return None
 
     def get_doctor_name(self, obj):
-        """Return consulting doctor name if linked via consultation."""
-        # Case 1: if PharmacyBill directly has a doctor field
         if hasattr(obj, "doctor") and obj.doctor:
             return obj.doctor.name
-
-        # Case 2: if there is a related consultation object
         if hasattr(obj, "consultation") and obj.consultation and obj.consultation.doctor:
             return obj.consultation.doctor.name
-
-        # Case 3: find latest consultation where doctor belongs to same clinic
         latest_consult = (
             Consultation.objects.filter(
                 patient=obj.patient,
-                doctor__clinic=obj.clinic  # ✅ FIXED lookup
+                doctor__clinic=obj.clinic
             )
             .select_related("doctor")
             .order_by("-created_at")
@@ -408,25 +391,34 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
         )
         if latest_consult and latest_consult.doctor:
             return latest_consult.doctor.name
-
         return None
+
+    def get_paid_amount(self, obj):
+        total_balance_due = sum(item.balance_due for item in obj.items.all())
+        return obj.total_amount - total_balance_due
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         bill = PharmacyBill.objects.create(**validated_data)
 
         for item_data in items_data:
-            item_type = item_data.get('item_type')
-            quantity = item_data.get('quantity', 1)
-
-            PharmacyBillItem.objects.create(
+            procedure_payments_data = item_data.pop('procedure_payments', [])
+            bill_item = PharmacyBillItem.objects.create(
                 bill=bill,
-                item_type=item_type,
+                item_type=item_data.get('item_type'),
                 medicine=item_data.get('medicine'),
                 procedure=item_data.get('procedure'),
-                quantity=quantity,
-                unit_price=item_data.get('unit_price', 0)
+                quantity=item_data.get('quantity', 1),
+                unit_price=item_data.get('unit_price', 0),
             )
+
+            if bill_item.item_type == "PROCEDURE":
+                for payment_data in procedure_payments_data:
+                    ProcedurePayment.objects.create(
+                        bill_item=bill_item,
+                        amount_paid=payment_data.get('amount_paid', 0),
+                        notes=payment_data.get('notes', '')
+                    )
 
         bill.total_amount = sum(item.subtotal for item in bill.items.all())
         bill.save()
@@ -440,24 +432,35 @@ class PharmacyBillSerializer(serializers.ModelSerializer):
         instance.save()
 
         if items_data is not None:
+            # Delete old items & payments
+            for item in instance.items.all():
+                if item.item_type == "PROCEDURE":
+                    item.payments.all().delete()
             instance.items.all().delete()
+
+            # Recreate items & payments
             for item_data in items_data:
-                PharmacyBillItem.objects.create(
+                procedure_payments_data = item_data.pop('procedure_payments', [])
+                bill_item = PharmacyBillItem.objects.create(
                     bill=instance,
                     item_type=item_data.get('item_type'),
                     medicine=item_data.get('medicine'),
                     procedure=item_data.get('procedure'),
                     quantity=item_data.get('quantity', 1),
-                    unit_price=item_data.get('unit_price', 0)
+                    unit_price=item_data.get('unit_price', 0),
                 )
+                if bill_item.item_type == "PROCEDURE":
+                    for payment_data in procedure_payments_data:
+                        ProcedurePayment.objects.create(
+                            bill_item=bill_item,
+                            amount_paid=payment_data.get('amount_paid', 0),
+                            notes=payment_data.get('notes', '')
+                        )
 
-            instance.total_amount = sum(item.subtotal for item in instance.items.all())
-            instance.save()
-
+        instance.total_amount = sum(item.subtotal for item in instance.items.all())
+        instance.save()
         return instance
 
-
-# serializers.py
 
 class ClinicPharmacyBillItemSerializer(serializers.ModelSerializer):
     # Accept medicine/procedure by ID for POST/PUT
