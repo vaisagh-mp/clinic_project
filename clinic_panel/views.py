@@ -94,18 +94,74 @@ class ClinicDashboardAPIView(APIView):
         return Response(data)
 
 # -------------------- Doctor --------------------
+
+def get_active_clinic(request, clinic_id=None):
+    """
+    Utility function to determine which clinic to act as.
+    Handles both:
+      - Logged-in clinic users
+      - Superadmin acting as clinic (via clinic_id or JWT)
+    """
+    user = request.user
+    clinic = None
+
+    if user.role == "SUPERADMIN":
+        # Case 1: clinic_id passed in URL
+        if clinic_id:
+            try:
+                target_user = User.objects.get(id=clinic_id, role="CLINIC")
+                clinic = target_user.clinic_profile
+            except (User.DoesNotExist, Clinic.DoesNotExist):
+                return None
+
+        # Case 2: JWT "acting_as" token
+        else:
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
+            if token:
+                try:
+                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
+                    acting_as_id = payload.get("target_id")
+                    if acting_as_id:
+                        acting_user = User.objects.get(id=acting_as_id)
+                        clinic = acting_user.clinic_profile
+                except Exception:
+                    pass
+
+        # fallback: pick first available clinic
+        if not clinic:
+            clinic = Clinic.objects.first()
+
+    elif user.role == "CLINIC":
+        try:
+            clinic = user.clinic_profile
+            if clinic_id and clinic.user.id != clinic_id:
+                return None
+        except Clinic.DoesNotExist:
+            return None
+
+    return clinic
+
+
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        # Filter doctors by clinic of logged-in user
-        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
+    def get(self, request, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    def post(self, request):
+    def post(self, request, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id  # assign logged-in clinic
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
@@ -119,33 +175,49 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-    def get(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def get(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    def put(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def put(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def patch(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def delete(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
