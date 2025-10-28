@@ -19,55 +19,59 @@ User = get_user_model()
 class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request, clinic_id=None):
         user = request.user
         clinic = None
 
-        # Case 1: Normal clinic user
-        if user.role == "CLINIC":
-            try:
-                clinic = user.clinic_profile
-            except Clinic.DoesNotExist:
-                return Response({"error": "Clinic profile not found."}, status=404)
-
-        # Case 2: Superadmin
-        elif user.role == "SUPERADMIN":
-            # Try to get acting clinic from JWT (if switched)
-            auth_header = request.headers.get("Authorization", "")
-            token = auth_header.split(" ")[1] if " " in auth_header else None
-
-            acting_as_role = None
-            acting_as_id = None
-
-            if token:
+        # --- Case 1: Superadmin (switching between clinics) ---
+        if user.role == "SUPERADMIN":
+            # ✅ Priority 1: use clinic_id from URL if provided
+            if clinic_id:
                 try:
-                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                    acting_as_role = payload.get("acting_as")
-                    acting_as_id = payload.get("target_id")
-                except Exception:
-                    pass  # ignore decoding errors
-
-            if acting_as_role == "clinic" and acting_as_id:
-                try:
-                    clinic_user = User.objects.get(id=acting_as_id)
-                    clinic = clinic_user.clinic_profile
-                except User.DoesNotExist:
-                    return Response({"error": "Clinic user not found."}, status=404)
+                    clinic = Clinic.objects.get(id=clinic_id)
                 except Clinic.DoesNotExist:
-                    return Response({"error": "Clinic profile not found."}, status=404)
+                    return Response({"error": "Clinic not found."}, status=404)
             else:
-                # No switch: fallback to first clinic in DB
+                # ✅ Priority 2: try to decode token for acting clinic
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header.split(" ")[1] if " " in auth_header else None
+                if token:
+                    try:
+                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                        acting_as_id = payload.get("target_id")
+                        if acting_as_id:
+                            clinic_user = User.objects.get(id=acting_as_id)
+                            clinic = clinic_user.clinic_profile
+                    except Exception:
+                        pass
+
+            # ✅ Priority 3: fallback to first available clinic
+            if not clinic:
                 clinic = Clinic.objects.first()
                 if not clinic:
                     return Response({"error": "No clinic available to access."}, status=404)
 
+        # --- Case 2: Normal clinic user ---
+        elif user.role == "CLINIC":
+            try:
+                clinic = user.clinic_profile
+                # ❌ Prevent access to other clinics even if ID is in URL
+                if clinic_id and clinic.id != clinic_id:
+                    return Response(
+                        {"error": "You are not authorized to access another clinic’s dashboard."},
+                        status=403
+                    )
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic profile not found."}, status=404)
+
+        # --- Case 3: Any other role ---
         else:
             return Response(
                 {"error": "Only clinic users or superadmin can access this endpoint."},
                 status=403
             )
 
-        # --- Fetch dashboard data ---
+        # --- Fetch related data ---
         doctors = Doctor.objects.filter(clinic=clinic)
         patients = Patient.objects.filter(clinic=clinic)
         appointments = Appointment.objects.filter(clinic=clinic)
