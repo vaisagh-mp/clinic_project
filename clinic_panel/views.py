@@ -97,25 +97,23 @@ class ClinicDashboardAPIView(APIView):
 
 def get_active_clinic(request, clinic_id=None):
     """
-    Utility function to determine which clinic to act as.
-    Handles both:
-      - Logged-in clinic users
-      - Superadmin acting as clinic (via clinic_id or JWT)
+    Determine which clinic to act as — works for both:
+    - Superadmin (with optional clinic_id or JWT)
+    - Clinic user (own clinic)
     """
     user = request.user
     clinic = None
 
+    # Case 1: Superadmin
     if user.role == "SUPERADMIN":
-        # Case 1: clinic_id passed in URL
         if clinic_id:
             try:
                 target_user = User.objects.get(id=clinic_id, role="CLINIC")
                 clinic = target_user.clinic_profile
             except (User.DoesNotExist, Clinic.DoesNotExist):
                 return None
-
-        # Case 2: JWT "acting_as" token
         else:
+            # fallback for acting_as token
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
             if token:
@@ -123,18 +121,19 @@ def get_active_clinic(request, clinic_id=None):
                     payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
                     acting_as_id = payload.get("target_id")
                     if acting_as_id:
-                        acting_user = User.objects.get(id=acting_as_id)
+                        acting_user = User.objects.get(id=acting_as_id, role="CLINIC")
                         clinic = acting_user.clinic_profile
                 except Exception:
                     pass
 
-        # fallback: pick first available clinic
         if not clinic:
             clinic = Clinic.objects.first()
 
+    # Case 2: Clinic user
     elif user.role == "CLINIC":
         try:
-            clinic = user.clinic_profile
+            clinic = Clinic.objects.get(user=user)
+            # Prevent acting as another clinic
             if clinic_id and clinic.user.id != clinic_id:
                 return None
         except Clinic.DoesNotExist:
