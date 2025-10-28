@@ -20,38 +20,47 @@ from clinic_project.permissions import RoleBasedPanelAccess
 
 User = get_user_model()
 
-class SwitchableUsersView(APIView):
-    permission_classes = [IsAuthenticated]
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def switch_panel(request):
+    user = request.user
 
-    def get(self, request):
-        # Only superadmin can get list
-        if request.user.role.lower() != "superadmin":
-            return Response({"error": "Unauthorized"}, status=403)
+    if user.role.upper() != "SUPERADMIN":
+        return Response({"error": "Only Superadmin can switch panels."}, status=403)
 
-        # Clinics
-        clinics = Clinic.objects.filter(status="ACTIVE").select_related("user")
-        clinic_list = [
-            {
-                "id": c.user.id,
-                "role": "clinic",
-                "name": c.name or c.user.username,
-            }
-            for c in clinics
-        ]
+    target_id = request.data.get("target_id")
+    if not target_id:
+        # Return to Superadmin mode
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+        return Response({
+            "access": str(access_token),
+            "acting_as": "superadmin",
+            "target_name": user.username,
+            "target_id": user.id,
+        })
 
-        # Doctors
-        doctors = Doctor.objects.all().select_related("user", "clinic")
-        doctor_list = [
-            {
-                "id": d.user.id,
-                "role": "doctor",
-                "name": d.name or d.user.username,
-            }
-            for d in doctors
-        ]
+    try:
+        target_user = User.objects.get(id=target_id)
+    except User.DoesNotExist:
+        return Response({"error": "Target user not found"}, status=404)
 
-        # Combine and return
-        return Response({"users": clinic_list + doctor_list})
+    refresh = RefreshToken.for_user(user)
+    access_token = refresh.access_token
+
+    access_token["acting_as_role"] = target_user.role.lower()
+    access_token["acting_as_user_id"] = target_user.id
+
+    full_name = f"{target_user.first_name} {target_user.last_name}".strip()
+    target_name = full_name or target_user.username
+
+    return Response({
+        "access": str(access_token),
+        "acting_as": target_user.role.lower(),
+        "target_name": target_name,
+        "target_id": target_user.id
+    })
+
     
     
 @api_view(['POST'])
