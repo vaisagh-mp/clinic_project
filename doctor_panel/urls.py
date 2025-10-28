@@ -9,6 +9,7 @@ app_name = "doctor_panel"
 urlpatterns = [
 
     path("dashboard/", DoctorDashboardAPIView.as_view(), name="doctor-dashboard"),
+    path("dashboard/<int:doctor_id>/", DoctorDashboardAPIView.as_view(), name="doctor-dashboard-with-id"),
 
     path("appointments/",DoctorAllAppointmentsAPIView.as_view(), name="doctor-all-appointments"),
     path("appointments/scheduled/", DoctorScheduledAppointmentsAPIView.as_view(), name="doctor-scheduled-appointments"),
