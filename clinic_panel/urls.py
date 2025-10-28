@@ -5,7 +5,7 @@ app_name = "clinic_panel"
 urlpatterns = [
 
     path("dashboard/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard"),
-    path("clinic/dashboard/<int:clinic_id>/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard-with-id"),
+    path("dashboard/<int:clinic_id>/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard-with-id"),
 
     # Doctors
     path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
