@@ -69,6 +69,11 @@ class ClinicDashboardAPIView(APIView):
         appointments = Appointment.objects.filter(clinic=clinic)
 
         data = {
+            "user": {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
             "clinic": clinic.name,
             "stats": {
                 "total_doctors": doctors.count(),
