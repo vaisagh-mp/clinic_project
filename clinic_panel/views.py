@@ -175,33 +175,49 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-    def get(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def get(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    def put(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def put(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def patch(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+    def delete(self, request, pk, clinic_id=None):
+        clinic = get_active_clinic(request, clinic_id)
+        if not clinic:
+            return Response({"error": "Unauthorized or invalid clinic access."}, status=403)
+
+        doctor = self.get_object(pk, clinic)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
