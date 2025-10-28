@@ -7,13 +7,14 @@ urlpatterns = [
     path("dashboard/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard"),
     path("dashboard/<int:clinic_id>/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard-with-id"),
 
-    # Doctors
-    path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
-    path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
-
-    # Superadmin optional version
-    path("doctors/<int:clinic_id>/", DoctorListCreateAPIView.as_view(), name="superadmin-doctor-list"),
+    # ✅ 1️⃣ Superadmin — specific first
     path("doctors/<int:clinic_id>/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="superadmin-doctor-detail"),
+    path("doctors/<int:clinic_id>/", DoctorListCreateAPIView.as_view(), name="superadmin-doctor-list"),
+
+    # ✅ 2️⃣ Clinic user — general after superadmin
+    path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
+    path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
+
 
     # Patients
     path("patients/", PatientListCreateAPIView.as_view(), name="clinic-patient-list-create"),

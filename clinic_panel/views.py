@@ -160,7 +160,6 @@ class DoctorListCreateAPIView(APIView):
         user = request.user
 
         if user.is_superuser:
-            # Superadmin mode — must include clinic_id
             if not clinic_id:
                 return Response(
                     {"detail": "clinic_id required for superadmin."},
@@ -168,7 +167,6 @@ class DoctorListCreateAPIView(APIView):
                 )
             doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
         else:
-            # Normal clinic user
             if not hasattr(user, "clinic_profile"):
                 return Response(
                     {"detail": "This user is not linked to any clinic."},
