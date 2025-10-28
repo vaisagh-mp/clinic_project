@@ -24,11 +24,11 @@ class SwitchableUsersView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Only superadmin can get list
+        # ✅ Only superadmin can get list
         if request.user.role.lower() != "superadmin":
             return Response({"error": "Unauthorized"}, status=403)
 
-        # Clinics
+        # ✅ Clinics
         clinics = Clinic.objects.filter(status="ACTIVE").select_related("user")
         clinic_list = [
             {
@@ -39,7 +39,7 @@ class SwitchableUsersView(APIView):
             for c in clinics
         ]
 
-        # Doctors
+        # ✅ Doctors
         doctors = Doctor.objects.all().select_related("user", "clinic")
         doctor_list = [
             {
@@ -50,8 +50,15 @@ class SwitchableUsersView(APIView):
             for d in doctors
         ]
 
-        # Combine and return
-        return Response({"users": clinic_list + doctor_list})
+        # ✅ Include Superadmin (self)
+        superadmin_info = {
+            "id": request.user.id,
+            "role": "superadmin",
+            "name": f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+        }
+
+        # ✅ Combine Superadmin + Clinics + Doctors
+        return Response({"users": [superadmin_info] + clinic_list + doctor_list})
     
     
 @api_view(['POST'])
