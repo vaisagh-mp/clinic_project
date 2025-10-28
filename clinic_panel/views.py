@@ -25,14 +25,14 @@ class ClinicDashboardAPIView(APIView):
 
         # --- Case 1: Superadmin (switching between clinics) ---
         if user.role == "SUPERADMIN":
-            # ✅ Priority 1: use clinic_id from URL if provided
             if clinic_id:
                 try:
-                    clinic = Clinic.objects.get(id=clinic_id)
-                except Clinic.DoesNotExist:
+                    target_user = User.objects.get(id=clinic_id, role="CLINIC")
+                    clinic = target_user.clinic_profile
+                except (User.DoesNotExist, Clinic.DoesNotExist):
                     return Response({"error": "Clinic not found."}, status=404)
             else:
-                # ✅ Priority 2: try to decode token for acting clinic
+                # fallback: use token acting_as info
                 auth_header = request.headers.get("Authorization", "")
                 token = auth_header.split(" ")[1] if " " in auth_header else None
                 if token:
@@ -40,12 +40,11 @@ class ClinicDashboardAPIView(APIView):
                         payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
                         acting_as_id = payload.get("target_id")
                         if acting_as_id:
-                            clinic_user = User.objects.get(id=acting_as_id)
-                            clinic = clinic_user.clinic_profile
+                            acting_user = User.objects.get(id=acting_as_id)
+                            clinic = acting_user.clinic_profile
                     except Exception:
                         pass
 
-            # ✅ Priority 3: fallback to first available clinic
             if not clinic:
                 clinic = Clinic.objects.first()
                 if not clinic:
@@ -55,21 +54,14 @@ class ClinicDashboardAPIView(APIView):
         elif user.role == "CLINIC":
             try:
                 clinic = user.clinic_profile
-                # ❌ Prevent access to other clinics even if ID is in URL
-                if clinic_id and clinic.id != clinic_id:
-                    return Response(
-                        {"error": "You are not authorized to access another clinic’s dashboard."},
-                        status=403
-                    )
+                if clinic_id and clinic.user.id != clinic_id:
+                    return Response({"error": "Unauthorized access."}, status=403)
             except Clinic.DoesNotExist:
                 return Response({"error": "Clinic profile not found."}, status=404)
 
-        # --- Case 3: Any other role ---
+        # --- Case 3: Others ---
         else:
-            return Response(
-                {"error": "Only clinic users or superadmin can access this endpoint."},
-                status=403
-            )
+            return Response({"error": "Only clinic users or superadmin can access this endpoint."}, status=403)
 
         # --- Fetch related data ---
         doctors = Doctor.objects.filter(clinic=clinic)
@@ -77,11 +69,6 @@ class ClinicDashboardAPIView(APIView):
         appointments = Appointment.objects.filter(clinic=clinic)
 
         data = {
-            "user": {
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-            },
             "clinic": clinic.name,
             "stats": {
                 "total_doctors": doctors.count(),
@@ -100,6 +87,7 @@ class ClinicDashboardAPIView(APIView):
         }
 
         return Response(data)
+
 # -------------------- Doctor --------------------
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
