@@ -15,24 +15,26 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
 class DoctorDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    panel_role = 'Doctor'
 
     def get(self, request, doctor_id=None):
         user = request.user
         doctor = None
 
-        # --- Superadmin Switching Case ---
+        # --- Case 1: Superadmin (switching between doctors) ---
         if user.role == "SUPERADMIN":
-            # Case 1: doctor_id in URL
             if doctor_id:
+                # If doctor_id is passed in URL, load that doctor's dashboard
                 try:
                     target_user = User.objects.get(id=doctor_id, role="DOCTOR")
                     doctor = target_user.doctor_profile
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
-                # Case 2: check token payload
+                # fallback: token may have 'acting_as' info
                 auth_header = request.headers.get("Authorization", "")
                 token = auth_header.split(" ")[1] if " " in auth_header else None
                 if token:
@@ -42,28 +44,27 @@ class DoctorDashboardAPIView(APIView):
                         if acting_as_id:
                             acting_user = User.objects.get(id=acting_as_id)
                             doctor = acting_user.doctor_profile
-                    except Exception as e:
-                        print("Token decode failed:", e)
+                    except Exception:
+                        pass
 
-            # Final fallback
+            # fallback if no doctor found
             if not doctor:
                 doctor = Doctor.objects.first()
                 if not doctor:
-                    return Response({"error": "No doctor found."}, status=404)
+                    return Response({"error": "No doctor found to access."}, status=404)
 
-        # --- Normal Doctor Case ---
+        # --- Case 2: Normal doctor user ---
         elif user.role == "DOCTOR":
             try:
                 doctor = user.doctor_profile
-                if doctor_id and doctor.user.id != doctor_id:
-                    return Response({"error": "Unauthorized doctor access."}, status=403)
             except Doctor.DoesNotExist:
-                return Response({"error": "Doctor profile missing."}, status=404)
+                return Response({"error": "Doctor profile not found."}, status=404)
 
+        # --- Case 3: Unauthorized roles ---
         else:
-            return Response({"error": "Access restricted to Superadmin or Doctor."}, status=403)
+            return Response({"error": "Only doctors or superadmins can access this dashboard."}, status=403)
 
-        # --- Fetch Dashboard Stats ---
+        # ✅ --- Dashboard Data ---
         total_consultations = Consultation.objects.filter(doctor=doctor).count()
         total_patients = Patient.objects.filter(appointments__doctor=doctor).distinct().count()
         total_prescriptions = Prescription.objects.filter(consultation__doctor=doctor).count()
@@ -76,7 +77,7 @@ class DoctorDashboardAPIView(APIView):
             status="SCHEDULED"
         ).order_by("appointment_date", "appointment_time")
 
-        upcoming_data = [
+        upcoming_appointments_data = [
             {
                 "id": appt.id,
                 "appointment_id": appt.appointment_id,
@@ -88,15 +89,19 @@ class DoctorDashboardAPIView(APIView):
             for appt in upcoming_appointments
         ]
 
+        user_data = {
+            "username": doctor.user.username,
+            "first_name": doctor.user.first_name,
+            "last_name": doctor.user.last_name,
+        }
+
         data = {
+            "user": user_data,
             "doctor_name": doctor.name,
-            "stats": {
-                "total_consultations": total_consultations,
-                "total_patients": total_patients,
-                "total_prescriptions": total_prescriptions,
-                "upcoming_appointments": len(upcoming_data),
-            },
-            "upcoming_appointments": upcoming_data,
+            "total_consultations": total_consultations,
+            "total_patients": total_patients,
+            "total_prescriptions": total_prescriptions,
+            "upcoming_appointments": upcoming_appointments_data,
         }
 
         return Response(data)
