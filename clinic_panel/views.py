@@ -157,28 +157,47 @@ class DoctorListCreateAPIView(APIView):
 
     def get(self, request, clinic_id=None):
         """Get all doctors for a clinic or the logged-in clinic"""
-        # If clinic_id is provided → superadmin mode
-        if clinic_id:
-            if not request.user.is_superuser:
-                return Response({"detail": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
+        user = request.user
+
+        if user.is_superuser:
+            # Superadmin mode — must include clinic_id
+            if not clinic_id:
+                return Response(
+                    {"detail": "clinic_id required for superadmin."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
         else:
             # Normal clinic user
-            doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
+            if not hasattr(user, "clinic_profile"):
+                return Response(
+                    {"detail": "This user is not linked to any clinic."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
 
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
     def post(self, request, clinic_id=None):
         """Create doctor for clinic"""
+        user = request.user
         data = request.data.copy()
 
-        if clinic_id:
-            if not request.user.is_superuser:
-                return Response({"detail": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
+        if user.is_superuser:
+            if not clinic_id:
+                return Response(
+                    {"detail": "clinic_id required for superadmin."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             data["clinic"] = clinic_id
         else:
-            data["clinic"] = request.user.clinic_profile.id
+            if not hasattr(user, "clinic_profile"):
+                return Response(
+                    {"detail": "This user is not linked to any clinic."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            data["clinic"] = user.clinic_profile.id
 
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
@@ -192,17 +211,22 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
 
     def get_object(self, pk, clinic_id, request):
         """Return the doctor object with correct access control"""
-        if clinic_id:
-            if not request.user.is_superuser:
-                raise PermissionError("Not authorized.")
+        user = request.user
+
+        if user.is_superuser:
+            if not clinic_id:
+                raise PermissionError("clinic_id required for superadmin.")
             return get_object_or_404(Doctor, pk=pk, clinic_id=clinic_id)
-        return get_object_or_404(Doctor, pk=pk, clinic=request.user.clinic_profile)
+        else:
+            if not hasattr(user, "clinic_profile"):
+                raise PermissionError("This user is not linked to any clinic.")
+            return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
 
     def get(self, request, pk, clinic_id=None):
         try:
             doctor = self.get_object(pk, clinic_id, request)
         except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
@@ -210,7 +234,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         try:
             doctor = self.get_object(pk, clinic_id, request)
         except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         data = request.data.copy()
         data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
@@ -225,7 +249,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         try:
             doctor = self.get_object(pk, clinic_id, request)
         except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         data = request.data.copy()
         data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
@@ -240,7 +264,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         try:
             doctor = self.get_object(pk, clinic_id, request)
         except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         if doctor.user:
             doctor.user.delete()
