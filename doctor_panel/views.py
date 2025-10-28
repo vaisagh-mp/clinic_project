@@ -26,13 +26,15 @@ class DoctorDashboardAPIView(APIView):
         # --- Case 1: Superadmin (switching between doctors) ---
         if user.role == "SUPERADMIN":
             if doctor_id:
+                # doctor_id in URL is likely a User.id, not Doctor.id
                 try:
+                    # ✅ fetch doctor by user_id
                     target_user = User.objects.get(id=doctor_id, role="DOCTOR")
                     doctor = target_user.doctor_profile
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
-                # fallback: use acting_as token info
+                # fallback: token acting_as info
                 auth_header = request.headers.get("Authorization", "")
                 token = auth_header.split(" ")[1] if " " in auth_header else None
                 if token:
@@ -63,6 +65,10 @@ class DoctorDashboardAPIView(APIView):
         else:
             return Response({"error": "Only doctor users or superadmin can access this endpoint."}, status=403)
 
+        # ✅ Ensure doctor is valid
+        if not doctor:
+            return Response({"error": "Doctor context missing."}, status=400)
+
         # --- Fetch related data ---
         total_consultations = Consultation.objects.filter(doctor=doctor).count()
         total_patients = Patient.objects.filter(appointments__doctor=doctor).distinct().count()
@@ -89,14 +95,14 @@ class DoctorDashboardAPIView(APIView):
         ]
 
         user_data = {
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
+            "username": doctor.user.username,
+            "first_name": doctor.user.first_name,
+            "last_name": doctor.user.last_name,
         }
 
         data = {
             "user": user_data,
-            "doctor_name": doctor.name,  # ✅ fixed line
+            "doctor_name": doctor.name,
             "stats": {
                 "total_consultations": total_consultations,
                 "total_patients": total_patients,
