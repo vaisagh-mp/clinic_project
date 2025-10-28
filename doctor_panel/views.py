@@ -15,6 +15,7 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
 class DoctorDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -31,7 +32,7 @@ class DoctorDashboardAPIView(APIView):
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
-                # fallback: use token acting_as info
+                # fallback: use acting_as token info
                 auth_header = request.headers.get("Authorization", "")
                 token = auth_header.split(" ")[1] if " " in auth_header else None
                 if token:
@@ -95,7 +96,7 @@ class DoctorDashboardAPIView(APIView):
 
         data = {
             "user": user_data,
-            "doctor_name": f"{doctor.first_name} {doctor.last_name}",
+            "doctor_name": doctor.name,  # ✅ fixed line
             "stats": {
                 "total_consultations": total_consultations,
                 "total_patients": total_patients,
