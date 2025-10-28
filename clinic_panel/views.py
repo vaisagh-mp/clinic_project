@@ -92,135 +92,59 @@ class ClinicDashboardAPIView(APIView):
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, clinic_id=None):
-        """
-        Superadmin:
-            /api/clinic/doctors/<clinic_id>/
-        Clinic user:
-            /api/clinic/doctors/
-        """
-        user = request.user
-
-        # Determine clinic
-        if hasattr(user, "is_superadmin") and user.is_superadmin:
-            # Superadmin can view doctors for any clinic
-            if clinic_id:
-                clinic = get_object_or_404(Clinic, pk=clinic_id)
-            else:
-                return Response(
-                    {"error": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            # Normal clinic user
-            clinic = getattr(user, "clinic_profile", None)
-
-        if not clinic:
-            return Response(
-                {"error": "Unauthorized or invalid clinic access."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # Fetch doctors for the selected clinic
-        doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
+    def get(self, request):
+        # Filter doctors by clinic of logged-in user
+        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    def post(self, request, clinic_id=None):
-        """
-        Superadmin:
-            Can create doctor for specific clinic_id
-        Clinic user:
-            Automatically assigns their own clinic
-        """
-        user = request.user
+    def post(self, request):
         data = request.data.copy()
-
-        # Determine which clinic to assign
-        if hasattr(user, "is_superadmin") and user.is_superadmin:
-            if clinic_id:
-                clinic = get_object_or_404(Clinic, pk=clinic_id)
-            else:
-                return Response(
-                    {"error": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            clinic = getattr(user, "clinic_profile", None)
-
-        if not clinic:
-            return Response(
-                {"error": "Unauthorized or invalid clinic access."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        data["clinic"] = clinic.id
+        data["clinic"] = request.user.clinic_profile.id  # assign logged-in clinic
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
-            return Response(
-                DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED
-            )
+            return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_clinic(self, request, clinic_id=None):
-        user = request.user
-        if hasattr(user, "is_superadmin") and user.is_superadmin:
-            if clinic_id:
-                return get_object_or_404(Clinic, pk=clinic_id)
-            return None
-        return getattr(user, "clinic_profile", None)
-
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-    def get(self, request, pk, clinic_id=None):
-        clinic = self.get_clinic(request, clinic_id)
-        if not clinic:
-            return Response({"error": "Unauthorized"}, status=403)
-        doctor = self.get_object(pk, clinic)
+    def get(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    def put(self, request, pk, clinic_id=None):
-        clinic = self.get_clinic(request, clinic_id)
-        if not clinic:
-            return Response({"error": "Unauthorized"}, status=403)
-        doctor = self.get_object(pk, clinic)
+    def put(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic.id
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk, clinic_id=None):
-        clinic = self.get_clinic(request, clinic_id)
-        if not clinic:
-            return Response({"error": "Unauthorized"}, status=403)
-        doctor = self.get_object(pk, clinic)
+    def patch(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic.id
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk, clinic_id=None):
-        clinic = self.get_clinic(request, clinic_id)
-        if not clinic:
-            return Response({"error": "Unauthorized"}, status=403)
-        doctor = self.get_object(pk, clinic)
+    def delete(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
-        return Response(status=204)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     
 # -------------------- Patient --------------------
