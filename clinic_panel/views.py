@@ -97,9 +97,9 @@ class ClinicDashboardAPIView(APIView):
 
 def get_active_clinic(request, clinic_id=None):
     """
-    Determine which clinic to act as — works for both:
-    - Superadmin (with optional clinic_id or JWT)
-    - Clinic user (own clinic)
+    Determine which clinic to act as — supports both:
+    - SUPERADMIN (with optional clinic_id or JWT token containing acting_as)
+    - CLINIC user (their own clinic only)
     """
     user = request.user
     clinic = None
@@ -113,7 +113,7 @@ def get_active_clinic(request, clinic_id=None):
             except (User.DoesNotExist, Clinic.DoesNotExist):
                 return None
         else:
-            # fallback for acting_as token
+            # fallback: check JWT for acting_as
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
             if token:
@@ -125,7 +125,6 @@ def get_active_clinic(request, clinic_id=None):
                         clinic = acting_user.clinic_profile
                 except Exception:
                     pass
-
         if not clinic:
             clinic = Clinic.objects.first()
 
