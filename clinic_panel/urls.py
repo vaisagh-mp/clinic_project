@@ -9,8 +9,7 @@ urlpatterns = [
 
     # Doctors
     path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
-    path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
-
+    path("doctors/<int:clinic_id>/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create-by-id"),
     path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
     path("doctors/<int:clinic_id>/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail-by-id"),
 
