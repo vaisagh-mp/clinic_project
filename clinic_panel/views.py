@@ -155,47 +155,66 @@ class ClinicDashboardAPIView(APIView):
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, clinic_id=None):
-        """Get all doctors for a clinic or the logged-in clinic"""
+    def get_clinic(self, request):
+        """
+        Determines the correct clinic for the request based on user role.
+        SUPERADMIN → can use clinic_id query param or token target_id
+        CLINIC → use linked clinic_profile
+        """
         user = request.user
+        clinic_id = request.query_params.get("clinic_id")
 
-        if user.is_superuser:
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
-        else:
+        # --- Case 1: SUPERADMIN (switch mode supported) ---
+        if getattr(user, "role", None) == "SUPERADMIN":
+            if clinic_id:
+                return get_object_or_404(Clinic, id=clinic_id)
+
+            # fallback: read from token payload (acting_as)
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
+            if token:
+                try:
+                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    target_id = payload.get("target_id")
+                    if target_id:
+                        acting_user = User.objects.get(id=target_id)
+                        return acting_user.clinic_profile
+                except Exception:
+                    pass
+
+            # fallback: first clinic in system
+            first_clinic = Clinic.objects.first()
+            if not first_clinic:
+                raise Exception("No clinics found in the system.")
+            return first_clinic
+
+        # --- Case 2: Normal clinic user ---
+        elif getattr(user, "role", None) == "CLINIC":
             if not hasattr(user, "clinic_profile"):
-                return Response(
-                    {"detail": "This user is not linked to any clinic."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
+                raise Exception("This user has no linked clinic.")
+            return user.clinic_profile
 
+        # --- Case 3: Unauthorized role ---
+        raise Exception("Unauthorized access. Only SUPERADMIN or CLINIC users allowed.")
+
+    def get(self, request):
+        try:
+            clinic = self.get_clinic(request)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+        doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    def post(self, request, clinic_id=None):
-        """Create doctor for clinic"""
-        user = request.user
-        data = request.data.copy()
+    def post(self, request):
+        try:
+            clinic = self.get_clinic(request)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        if user.is_superuser:
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            data["clinic"] = clinic_id
-        else:
-            if not hasattr(user, "clinic_profile"):
-                return Response(
-                    {"detail": "This user is not linked to any clinic."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            data["clinic"] = user.clinic_profile.id
+        data = request.data.copy()
+        data["clinic"] = clinic.id
 
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
