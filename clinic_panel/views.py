@@ -155,42 +155,38 @@ class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic_context(self, request, clinic_id=None):
-        """Determine clinic context based on role or token (like dashboard view)."""
+        """Determine clinic context based on role, token, or explicit ID."""
         user = request.user
         clinic = None
 
-        # If a clinic_id is explicitly given, use that
+        # ✅ If clinic_id is passed explicitly (e.g. /api/clinic/<id>/doctors/)
         if clinic_id:
-            try:
-                clinic = Clinic.objects.get(id=clinic_id)
-                return clinic
-            except Clinic.DoesNotExist:
-                return None
+            return Clinic.objects.filter(id=clinic_id).first()
 
-        # Otherwise fallback to current user’s clinic context
-        if user.role == "SUPERADMIN":
-            # Try decoding token
+        # ✅ If logged-in user is SUPERADMIN (can switch clinic)
+        if user.role.upper() == "SUPERADMIN":
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
+
             if token:
                 try:
-                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
                     acting_as_id = payload.get("target_id")
                     if acting_as_id:
                         acting_user = User.objects.get(id=acting_as_id)
-                        clinic = acting_user.clinic_profile
+                        clinic = getattr(acting_user, "clinic_profile", None)
                 except Exception:
                     pass
 
             if not clinic:
-                clinic = Clinic.objects.first()
+                clinic = Clinic.objects.first()  # fallback (optional)
 
-        elif user.role == "CLINIC":
+        # ✅ If logged-in user is CLINIC
+        elif user.role.upper() == "CLINIC":
             clinic = getattr(user, "clinic_profile", None)
 
         return clinic
 
-    # --- GET all doctors ---
     def get(self, request, clinic_id=None):
         clinic = self.get_clinic_context(request, clinic_id)
         if not clinic:
@@ -200,7 +196,6 @@ class DoctorListCreateAPIView(APIView):
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    # --- POST create doctor ---
     def post(self, request, clinic_id=None):
         clinic = self.get_clinic_context(request, clinic_id)
         if not clinic:
@@ -208,6 +203,7 @@ class DoctorListCreateAPIView(APIView):
 
         data = request.data.copy()
         data["clinic"] = clinic.id
+
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
@@ -215,42 +211,39 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic_context(self, request):
-        """Same logic as above to maintain consistent behavior."""
+        """Determine clinic context same way as list view."""
         user = request.user
         clinic = None
 
-        if user.role == "SUPERADMIN":
+        if user.role.upper() == "SUPERADMIN":
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
+
             if token:
                 try:
-                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
                     acting_as_id = payload.get("target_id")
                     if acting_as_id:
                         acting_user = User.objects.get(id=acting_as_id)
-                        clinic = acting_user.clinic_profile
+                        clinic = getattr(acting_user, "clinic_profile", None)
                 except Exception:
                     pass
+
             if not clinic:
                 clinic = Clinic.objects.first()
 
-        elif user.role == "CLINIC":
-            try:
-                clinic = user.clinic_profile
-            except Clinic.DoesNotExist:
-                pass
+        elif user.role.upper() == "CLINIC":
+            clinic = getattr(user, "clinic_profile", None)
 
         return clinic
 
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-    # --- Retrieve ---
     def get(self, request, pk):
         clinic = self.get_clinic_context(request)
         if not clinic:
@@ -259,11 +252,11 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    # --- Update (PUT/PATCH) ---
     def put(self, request, pk):
         clinic = self.get_clinic_context(request)
         if not clinic:
             return Response({"error": "No clinic context found."}, status=403)
+
         doctor = self.get_object(pk, clinic)
         data = request.data.copy()
         data["clinic"] = clinic.id
@@ -277,6 +270,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         clinic = self.get_clinic_context(request)
         if not clinic:
             return Response({"error": "No clinic context found."}, status=403)
+
         doctor = self.get_object(pk, clinic)
         data = request.data.copy()
         data["clinic"] = clinic.id
@@ -286,11 +280,11 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # --- Delete ---
     def delete(self, request, pk):
         clinic = self.get_clinic_context(request)
         if not clinic:
             return Response({"error": "No clinic context found."}, status=403)
+
         doctor = self.get_object(pk, clinic)
         if doctor.user:
             doctor.user.delete()
