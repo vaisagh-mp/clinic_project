@@ -207,67 +207,41 @@ class DoctorListCreateAPIView(APIView):
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk, clinic_id, request):
-        """Return the doctor object with correct access control"""
-        user = request.user
+    def get_object(self, pk, clinic):
+        return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-        if user.is_superuser:
-            if not clinic_id:
-                raise PermissionError("clinic_id required for superadmin.")
-            return get_object_or_404(Doctor, pk=pk, clinic_id=clinic_id)
-        else:
-            if not hasattr(user, "clinic_profile"):
-                raise PermissionError("This user is not linked to any clinic.")
-            return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
-
-    def get(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    def get(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    def put(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def put(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def patch(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def delete(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # -------------------- Patient --------------------
 class PatientListCreateAPIView(APIView):
