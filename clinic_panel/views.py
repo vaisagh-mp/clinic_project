@@ -226,18 +226,67 @@ class DoctorListCreateAPIView(APIView):
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_clinic(self, request):
+        """
+        Reuses the same clinic detection logic as DoctorListCreateAPIView.
+        """
+        user = request.user
+        clinic_id = request.query_params.get("clinic_id")
+
+        # --- SUPERADMIN (switch mode supported) ---
+        if getattr(user, "role", None) == "SUPERADMIN":
+
+            if clinic_id:
+                return get_object_or_404(Clinic, id=clinic_id)
+
+            # fallback: decode token for acting clinic
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
+            if token:
+                try:
+                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
+                    target_id = payload.get("target_id")
+                    if target_id:
+                        acting_user = User.objects.get(id=target_id)
+                        return acting_user.clinic_profile
+                except Exception:
+                    pass
+
+            # fallback: first clinic
+            first_clinic = Clinic.objects.first()
+            if not first_clinic:
+                raise Exception("No clinics found in the system.")
+            return first_clinic
+
+        # --- CLINIC ROLE ---
+        elif getattr(user, "role", None) == "CLINIC":
+            if not hasattr(user, "clinic_profile"):
+                raise Exception("This user has no linked clinic.")
+            return user.clinic_profile
+
+        raise Exception("Unauthorized access. Only SUPERADMIN or CLINIC users allowed.")
+
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
     def get(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
-        serializer = DoctorSerializer(doctor)
-        return Response(serializer.data)
+        try:
+            clinic = self.get_clinic(request)
+            doctor = self.get_object(pk, clinic)
+            serializer = DoctorSerializer(doctor)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
     def put(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        try:
+            clinic = self.get_clinic(request)
+            doctor = self.get_object(pk, clinic)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
@@ -245,9 +294,14 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        try:
+            clinic = self.get_clinic(request)
+            doctor = self.get_object(pk, clinic)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -255,7 +309,12 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        try:
+            clinic = self.get_clinic(request)
+            doctor = self.get_object(pk, clinic)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
