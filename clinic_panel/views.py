@@ -625,137 +625,285 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         patient.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 # -------------------- Appointment --------------------
+# class AppointmentListCreateAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_serializer_class(self):
+#         """Choose serializer based on user type."""
+#         user = self.request.user
+#         if hasattr(user, "clinic_profile"):
+#             return ClinicAppointmentSerializer
+#         return AppointmentSerializer
+
+#     def get_queryset(self, request):
+#         """Filter appointments by user type and optionally by patient_id."""
+#         user = request.user
+#         patient_id = request.query_params.get("patient_id")
+
+#         # --- Start with base queryset depending on role ---
+#         if hasattr(user, "clinic_profile"):
+#             queryset = Appointment.objects.filter(clinic=user.clinic_profile)
+
+#         elif hasattr(user, "doctor_profile"):
+#             queryset = Appointment.objects.filter(doctor=user.doctor_profile)
+
+#         else:
+#             clinic_id = request.query_params.get("clinic")
+#             if clinic_id:
+#                 queryset = Appointment.objects.filter(clinic_id=clinic_id)
+#             else:
+#                 queryset = Appointment.objects.all()
+
+#         # --- ✅ Apply patient filter if provided ---
+#         if patient_id:
+#             queryset = queryset.filter(patient_id=patient_id)
+            
+#         queryset = queryset.order_by("-appointment_date", "-appointment_time")
+
+#         return queryset
+
+#     def get(self, request):
+#         appointments = self.get_queryset(request).order_by(
+#             "-appointment_date", "-appointment_time"
+#         )
+#         serializer_class = self.get_serializer_class()
+#         serializer = serializer_class(appointments, many=True)
+#         return Response(serializer.data)
+
+#     def post(self, request):
+#         data = request.data.copy()
+#         user = request.user
+#         serializer_class = self.get_serializer_class()
+
+#         context = {}
+#         # Auto-assign clinic for clinic panel
+#         if hasattr(user, "clinic_profile"):
+#             data["clinic_id"] = user.clinic_profile.id
+#             context["clinic"] = user.clinic_profile
+#         else:
+#             # Admin must provide clinic_id
+#             if "clinic_id" not in data:
+#                 return Response(
+#                     {"detail": "clinic_id is required for appointment creation."},
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+
+#         serializer = serializer_class(data=data, context=context)
+#         if serializer.is_valid():
+#             serializer.save(created_by=user)
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+# class AppointmentRetrieveUpdateDeleteAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_object(self, pk):
+#         user = self.request.user
+#         if hasattr(user, "doctor_profile"):
+#             return get_object_or_404(Appointment, pk=pk, doctor=user.doctor_profile)
+#         elif hasattr(user, "clinic_profile"):
+#             return get_object_or_404(Appointment, pk=pk, clinic=user.clinic_profile)
+#         else:
+#             return get_object_or_404(Appointment, pk=pk)
+
+#     def get_serializer_class(self):
+#         """Return serializer based on user type."""
+#         user = self.request.user
+#         if hasattr(user, "clinic_profile"):
+#             return ClinicAppointmentSerializer
+#         return AppointmentSerializer
+
+#     def get(self, request, pk):
+#         appointment = self.get_object(pk)
+#         serializer_class = self.get_serializer_class()
+#         serializer = serializer_class(appointment)
+#         return Response(serializer.data)
+
+#     def put(self, request, pk):
+#         appointment = self.get_object(pk)
+#         serializer_class = self.get_serializer_class()
+
+#         context = {}
+#         if hasattr(request.user, "clinic_profile"):
+#             context["clinic"] = request.user.clinic_profile
+
+#         serializer = serializer_class(
+#             appointment, data=request.data, context=context
+#         )
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def patch(self, request, pk):
+#         appointment = self.get_object(pk)
+#         serializer_class = self.get_serializer_class()
+
+#         context = {}
+#         if hasattr(request.user, "clinic_profile"):
+#             context["clinic"] = request.user.clinic_profile
+
+#         serializer = serializer_class(
+#             appointment, data=request.data, partial=True, context=context
+#         )
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def delete(self, request, pk):
+#         appointment = self.get_object(pk)
+#         appointment.delete()
+#         return Response(status=status.HTTP_204_NO_CONTENT)
+
 class AppointmentListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
-        """Choose serializer based on user type."""
         user = self.request.user
         if hasattr(user, "clinic_profile"):
             return ClinicAppointmentSerializer
         return AppointmentSerializer
 
+    def get_clinic(self, request):
+        """✅ Get clinic for clinic user or superadmin (via query param)."""
+        user = request.user
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+        elif user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if clinic_id:
+                return get_object_or_404(Clinic, id=clinic_id)
+        return None
+
     def get_queryset(self, request):
-        """Filter appointments by user type and optionally by patient_id."""
+        """✅ Return filtered queryset based on role."""
         user = request.user
         patient_id = request.query_params.get("patient_id")
+        clinic = self.get_clinic(request)
 
-        # --- Start with base queryset depending on role ---
-        if hasattr(user, "clinic_profile"):
-            queryset = Appointment.objects.filter(clinic=user.clinic_profile)
+        if not clinic:
+            return Appointment.objects.none()
 
-        elif hasattr(user, "doctor_profile"):
-            queryset = Appointment.objects.filter(doctor=user.doctor_profile)
+        queryset = Appointment.objects.filter(clinic=clinic)
 
-        else:
-            clinic_id = request.query_params.get("clinic")
-            if clinic_id:
-                queryset = Appointment.objects.filter(clinic_id=clinic_id)
-            else:
-                queryset = Appointment.objects.all()
+        if hasattr(user, "doctor_profile"):
+            queryset = queryset.filter(doctor=user.doctor_profile)
 
-        # --- ✅ Apply patient filter if provided ---
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
-            
-        queryset = queryset.order_by("-appointment_date", "-appointment_time")
 
-        return queryset
+        return queryset.order_by("-appointment_date", "-appointment_time")
 
     def get(self, request):
-        appointments = self.get_queryset(request).order_by(
-            "-appointment_date", "-appointment_time"
-        )
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        appointments = self.get_queryset(request)
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(appointments, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        data = request.data.copy()
         user = request.user
+        data = request.data.copy()
         serializer_class = self.get_serializer_class()
-
         context = {}
-        # Auto-assign clinic for clinic panel
-        if hasattr(user, "clinic_profile"):
-            data["clinic_id"] = user.clinic_profile.id
-            context["clinic"] = user.clinic_profile
-        else:
-            # Admin must provide clinic_id
-            if "clinic_id" not in data:
-                return Response(
-                    {"detail": "clinic_id is required for appointment creation."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        data["clinic_id"] = clinic.id
+        context["clinic"] = clinic
 
         serializer = serializer_class(data=data, context=context)
         if serializer.is_valid():
             serializer.save(created_by=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class AppointmentRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk):
-        user = self.request.user
-        if hasattr(user, "doctor_profile"):
-            return get_object_or_404(Appointment, pk=pk, doctor=user.doctor_profile)
-        elif hasattr(user, "clinic_profile"):
-            return get_object_or_404(Appointment, pk=pk, clinic=user.clinic_profile)
-        else:
-            return get_object_or_404(Appointment, pk=pk)
-
     def get_serializer_class(self):
-        """Return serializer based on user type."""
         user = self.request.user
         if hasattr(user, "clinic_profile"):
             return ClinicAppointmentSerializer
         return AppointmentSerializer
 
+    def get_clinic(self, request):
+        """✅ Determine clinic for both superadmin and clinic user."""
+        user = request.user
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+        elif user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if clinic_id:
+                return get_object_or_404(Clinic, id=clinic_id)
+        return None
+
+    def get_object(self, pk, clinic):
+        """✅ Get appointment restricted to that clinic."""
+        return get_object_or_404(Appointment, pk=pk, clinic=clinic)
+
     def get(self, request, pk):
-        appointment = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        appointment = self.get_object(pk, clinic)
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(appointment)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        appointment = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        appointment = self.get_object(pk, clinic)
         serializer_class = self.get_serializer_class()
 
-        context = {}
-        if hasattr(request.user, "clinic_profile"):
-            context["clinic"] = request.user.clinic_profile
+        data = request.data.copy()
+        data["clinic_id"] = clinic.id
+        context = {"clinic": clinic}
 
-        serializer = serializer_class(
-            appointment, data=request.data, context=context
-        )
+        serializer = serializer_class(appointment, data=data, context=context)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        appointment = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        appointment = self.get_object(pk, clinic)
         serializer_class = self.get_serializer_class()
 
-        context = {}
-        if hasattr(request.user, "clinic_profile"):
-            context["clinic"] = request.user.clinic_profile
+        data = request.data.copy()
+        data["clinic_id"] = clinic.id
+        context = {"clinic": clinic}
 
-        serializer = serializer_class(
-            appointment, data=request.data, partial=True, context=context
-        )
+        serializer = serializer_class(appointment, data=data, partial=True, context=context)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        appointment = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        appointment = self.get_object(pk, clinic)
         appointment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
