@@ -100,17 +100,12 @@ class DoctorListCreateAPIView(APIView):
     def get(self, request):
         user = request.user
 
-        # ✅ SUPERADMIN can view all doctors
-        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
-            doctors = Doctor.objects.all().order_by("-created_at")
-
-        # ✅ Clinic user can view only their own clinic’s doctors
-        elif hasattr(user, "clinic_profile"):
+        # ✅ Both SUPERADMIN and Clinic user can view only their own clinic’s doctors
+        if hasattr(user, "clinic_profile"):
             doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
-
         else:
             return Response(
-                {"detail": "You do not have permission to view doctors."},
+                {"detail": "This user is not linked to any clinic."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -121,20 +116,12 @@ class DoctorListCreateAPIView(APIView):
         user = request.user
         data = request.data.copy()
 
-        # ✅ SUPERADMIN can assign a clinic manually via request
-        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
-            clinic_id = data.get("clinic")
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic field is required for SUPERADMIN."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        # ✅ Clinic user — auto-assign clinic
-        elif hasattr(user, "clinic_profile"):
+        # ✅ Assign the clinic automatically for both SUPERADMIN and Clinic user
+        if hasattr(user, "clinic_profile"):
             data["clinic"] = user.clinic_profile.id
         else:
             return Response(
-                {"detail": "You do not have permission to create doctors."},
+                {"detail": "You are not linked to any clinic."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -149,13 +136,10 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, pk, user):
-        """Return the doctor object if the user has permission."""
-        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
-            return get_object_or_404(Doctor, pk=pk)
-        elif hasattr(user, "clinic_profile"):
+        """Return the doctor object if user has access to their clinic."""
+        if hasattr(user, "clinic_profile"):
             return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
-        else:
-            return None
+        return None
 
     def get(self, request, pk):
         doctor = self.get_object(pk, request.user)
@@ -170,11 +154,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
             return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
-        user = request.user
-
-        if getattr(user, "role", None) != "SUPERADMIN" and not user.is_superuser:
-            data["clinic"] = user.clinic_profile.id  # enforce clinic for non-superadmin
-
+        data["clinic"] = request.user.clinic_profile.id  # enforce clinic ownership
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
@@ -187,11 +167,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
             return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
-        user = request.user
-
-        if getattr(user, "role", None) != "SUPERADMIN" and not user.is_superuser:
-            data["clinic"] = user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -207,6 +183,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
             doctor.user.delete()
         doctor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # class DoctorListCreateAPIView(APIView):
 #     permission_classes = [permissions.IsAuthenticated]
