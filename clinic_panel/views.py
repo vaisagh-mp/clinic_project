@@ -98,14 +98,46 @@ class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Filter doctors by clinic of logged-in user
-        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
+        user = request.user
+
+        # ✅ SUPERADMIN can view all doctors
+        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
+            doctors = Doctor.objects.all().order_by("-created_at")
+
+        # ✅ Clinic user can view only their own clinic’s doctors
+        elif hasattr(user, "clinic_profile"):
+            doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
+
+        else:
+            return Response(
+                {"detail": "You do not have permission to view doctors."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        user = request.user
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id  # assign logged-in clinic
+
+        # ✅ SUPERADMIN can assign a clinic manually via request
+        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
+            clinic_id = data.get("clinic")
+            if not clinic_id:
+                return Response(
+                    {"detail": "clinic field is required for SUPERADMIN."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        # ✅ Clinic user — auto-assign clinic
+        elif hasattr(user, "clinic_profile"):
+            data["clinic"] = user.clinic_profile.id
+        else:
+            return Response(
+                {"detail": "You do not have permission to create doctors."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
@@ -116,18 +148,33 @@ class DoctorListCreateAPIView(APIView):
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk, clinic):
-        return get_object_or_404(Doctor, pk=pk, clinic=clinic)
+    def get_object(self, pk, user):
+        """Return the doctor object if the user has permission."""
+        if getattr(user, "role", None) == "SUPERADMIN" or user.is_superuser:
+            return get_object_or_404(Doctor, pk=pk)
+        elif hasattr(user, "clinic_profile"):
+            return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
+        else:
+            return None
 
     def get(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        doctor = self.get_object(pk, request.user)
+        if not doctor:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        doctor = self.get_object(pk, request.user)
+        if not doctor:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        user = request.user
+
+        if getattr(user, "role", None) != "SUPERADMIN" and not user.is_superuser:
+            data["clinic"] = user.clinic_profile.id  # enforce clinic for non-superadmin
+
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
@@ -135,9 +182,16 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        doctor = self.get_object(pk, request.user)
+        if not doctor:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
         data = request.data.copy()
-        data["clinic"] = request.user.clinic_profile.id
+        user = request.user
+
+        if getattr(user, "role", None) != "SUPERADMIN" and not user.is_superuser:
+            data["clinic"] = user.clinic_profile.id
+
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -145,12 +199,14 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        doctor = self.get_object(pk, request.user.clinic_profile)
+        doctor = self.get_object(pk, request.user)
+        if not doctor:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 # class DoctorListCreateAPIView(APIView):
 #     permission_classes = [permissions.IsAuthenticated]
