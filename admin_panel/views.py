@@ -28,43 +28,37 @@ class SwitchableUsersView(APIView):
         if request.user.role.lower() != "superadmin":
             return Response({"error": "Unauthorized"}, status=403)
 
-        # ✅ Clinics list
+        # ✅ Clinics
         clinics = Clinic.objects.filter(status="ACTIVE").select_related("user")
         clinic_list = [
             {
                 "id": c.user.id,
                 "role": "clinic",
                 "name": c.name or c.user.username,
-                "clinic_id": c.id,  # ✅ Include clinic_id
             }
             for c in clinics
         ]
 
-        # ✅ Doctors list
-        doctors = Doctor.objects.select_related("user", "clinic").all()
+        # ✅ Doctors
+        doctors = Doctor.objects.all().select_related("user", "clinic")
         doctor_list = [
             {
                 "id": d.user.id,
                 "role": "doctor",
                 "name": d.name or d.user.username,
-                "clinic_id": d.clinic.id if d.clinic else None,  # ✅ Include clinic_id
             }
             for d in doctors
         ]
 
-        # ✅ Superadmin (self)
+        # ✅ Include Superadmin (self)
         superadmin_info = {
             "id": request.user.id,
             "role": "superadmin",
-            "name": f"{request.user.first_name} {request.user.last_name}".strip()
-            or request.user.username,
-            "clinic_id": None,  # ✅ Explicitly include for consistency
+            "name": f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
         }
 
-        # ✅ Combine and return
-        return Response({
-            "users": [superadmin_info] + clinic_list + doctor_list
-        })
+        # ✅ Combine Superadmin + Clinics + Doctors
+        return Response({"users": [superadmin_info] + clinic_list + doctor_list})
     
     
 @api_view(['POST'])
