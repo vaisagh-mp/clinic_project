@@ -157,19 +157,20 @@ class DoctorListCreateAPIView(APIView):
 
     def get_clinic(self, request):
         """
-        Determines the correct clinic for the request based on user role.
-        SUPERADMIN → can use clinic_id query param or token target_id
-        CLINIC → use linked clinic_profile
+        Determines which clinic to use based on the logged-in user's role.
+        SUPERADMIN → can switch clinics using ?clinic_id= or token's target_id.
+        CLINIC USER → always tied to their clinic_profile.
         """
         user = request.user
         clinic_id = request.query_params.get("clinic_id")
 
-        # --- Case 1: SUPERADMIN (switch mode supported) ---
-        if getattr(user, "role", None) == "SUPERADMIN":
+        # --- SUPERADMIN MODE ---
+        if getattr(user, "role", "").upper() == "SUPERADMIN":
+            # Case 1: Explicit clinic_id in query params
             if clinic_id:
                 return get_object_or_404(Clinic, id=clinic_id)
 
-            # fallback: read from token payload (acting_as)
+            # Case 2: Token contains acting clinic_id (target_id)
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
             if token:
@@ -177,26 +178,27 @@ class DoctorListCreateAPIView(APIView):
                     payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
                     target_id = payload.get("target_id")
                     if target_id:
-                        acting_user = User.objects.get(id=target_id)
-                        return acting_user.clinic_profile
+                        target_user = User.objects.filter(id=target_id).first()
+                        if getattr(target_user, "clinic_profile", None):
+                            return target_user.clinic_profile
                 except Exception:
                     pass
 
-            # fallback: first clinic in system
-            first_clinic = Clinic.objects.first()
-            if not first_clinic:
-                raise Exception("No clinics found in the system.")
-            return first_clinic
+            # Case 3: Fallback — if superadmin hasn’t switched, deny access
+            raise Exception("No clinic selected. Please provide clinic_id in query or switch clinic.")
 
-        # --- Case 2: Normal clinic user ---
-        elif getattr(user, "role", None) == "CLINIC":
-            if not hasattr(user, "clinic_profile"):
-                raise Exception("This user has no linked clinic.")
-            return user.clinic_profile
+        # --- CLINIC USER MODE ---
+        elif getattr(user, "role", "").upper() == "CLINIC":
+            if hasattr(user, "clinic_profile"):
+                return user.clinic_profile
+            raise Exception("This user has no linked clinic.")
 
-        # --- Case 3: Unauthorized role ---
-        raise Exception("Unauthorized access. Only SUPERADMIN or CLINIC users allowed.")
+        # --- INVALID ROLE ---
+        raise Exception("Unauthorized role. Access denied.")
 
+    # -------------------------------
+    # GET → List all doctors in clinic
+    # -------------------------------
     def get(self, request):
         try:
             clinic = self.get_clinic(request)
@@ -207,6 +209,9 @@ class DoctorListCreateAPIView(APIView):
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
+    # -------------------------------
+    # POST → Create doctor
+    # -------------------------------
     def post(self, request):
         try:
             clinic = self.get_clinic(request)
