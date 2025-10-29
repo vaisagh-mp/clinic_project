@@ -159,46 +159,39 @@ class DoctorListCreateAPIView(APIView):
         user = request.user
         clinic = None
 
+        # If a clinic_id is explicitly given, use that
+        if clinic_id:
+            try:
+                clinic = Clinic.objects.get(id=clinic_id)
+                return clinic
+            except Clinic.DoesNotExist:
+                return None
+
+        # Otherwise fallback to current user’s clinic context
         if user.role == "SUPERADMIN":
-            # If clinic_id provided, use it directly
-            if clinic_id:
+            # Try decoding token
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
+            if token:
                 try:
-                    target_user = User.objects.get(id=clinic_id, role="CLINIC")
-                    clinic = target_user.clinic_profile
-                except (User.DoesNotExist, Clinic.DoesNotExist):
+                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    acting_as_id = payload.get("target_id")
+                    if acting_as_id:
+                        acting_user = User.objects.get(id=acting_as_id)
+                        clinic = acting_user.clinic_profile
+                except Exception:
                     pass
 
-            # fallback: decode token
-            if not clinic:
-                auth_header = request.headers.get("Authorization", "")
-                token = auth_header.split(" ")[1] if " " in auth_header else None
-                if token:
-                    try:
-                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                        acting_as_id = payload.get("target_id")
-                        if acting_as_id:
-                            acting_user = User.objects.get(id=acting_as_id)
-                            clinic = acting_user.clinic_profile
-                    except Exception:
-                        pass
-
-            # fallback
             if not clinic:
                 clinic = Clinic.objects.first()
 
         elif user.role == "CLINIC":
-            try:
-                clinic = user.clinic_profile
-                # safety: prevent cross-clinic access
-                if clinic_id and clinic.user.id != clinic_id:
-                    return None
-            except Clinic.DoesNotExist:
-                pass
+            clinic = getattr(user, "clinic_profile", None)
 
         return clinic
 
     # --- GET all doctors ---
-    def get(self, request, clinic_id=None):  # ✅ accept clinic_id
+    def get(self, request, clinic_id=None):
         clinic = self.get_clinic_context(request, clinic_id)
         if not clinic:
             return Response({"error": "No clinic context found."}, status=403)
@@ -208,7 +201,7 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.data)
 
     # --- POST create doctor ---
-    def post(self, request, clinic_id=None):  # ✅ accept clinic_id
+    def post(self, request, clinic_id=None):
         clinic = self.get_clinic_context(request, clinic_id)
         if not clinic:
             return Response({"error": "No clinic context found."}, status=403)
@@ -220,6 +213,7 @@ class DoctorListCreateAPIView(APIView):
             doctor = serializer.save()
             return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
