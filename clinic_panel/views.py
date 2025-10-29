@@ -159,13 +159,14 @@ class DoctorListCreateAPIView(APIView):
         """Get all doctors for a clinic or the logged-in clinic"""
         user = request.user
 
+        # ✅ Superadmin: can view all doctors or filter by clinic
         if user.is_superuser:
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
+            if clinic_id:
+                doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
+            else:
+                doctors = Doctor.objects.all().order_by("-created_at")
+
+        # ✅ Clinic user: only their own clinic's doctors
         else:
             if not hasattr(user, "clinic_profile"):
                 return Response(
@@ -178,17 +179,19 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request, clinic_id=None):
-        """Create doctor for clinic"""
+        """Create doctor for a clinic (superadmin or clinic user)"""
         user = request.user
         data = request.data.copy()
 
         if user.is_superuser:
-            if not clinic_id:
+            # Superadmin can specify a clinic or use the URL param
+            if clinic_id:
+                data["clinic"] = clinic_id
+            elif "clinic" not in data:
                 return Response(
-                    {"detail": "clinic_id required for superadmin."},
+                    {"detail": "clinic_id required to create doctor."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            data["clinic"] = clinic_id
         else:
             if not hasattr(user, "clinic_profile"):
                 return Response(
