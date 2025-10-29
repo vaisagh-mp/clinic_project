@@ -151,76 +151,58 @@ class ClinicDashboardAPIView(APIView):
 #         doctor.delete()
 #         return Response(status=status.HTTP_204_NO_CONTENT)
 
-
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_clinic(self, request):
-        """
-        Determines which clinic to use based on the logged-in user's role.
-        SUPERADMIN → can switch clinics using ?clinic_id= or token's target_id.
-        CLINIC USER → always tied to their clinic_profile.
-        """
+    def get_clinic_context(self, request):
+        """Determine clinic context based on role or token (like dashboard view)."""
         user = request.user
-        clinic_id = request.query_params.get("clinic_id")
+        clinic = None
 
-        # --- SUPERADMIN MODE ---
-        if getattr(user, "role", "").upper() == "SUPERADMIN":
-            # Case 1: Explicit clinic_id in query params
-            if clinic_id:
-                return get_object_or_404(Clinic, id=clinic_id)
-
-            # Case 2: Token contains acting clinic_id (target_id)
+        if user.role == "SUPERADMIN":
+            # try decode token
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
             if token:
                 try:
                     payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                    target_id = payload.get("target_id")
-                    if target_id:
-                        target_user = User.objects.filter(id=target_id).first()
-                        if getattr(target_user, "clinic_profile", None):
-                            return target_user.clinic_profile
+                    acting_as_id = payload.get("target_id")
+                    if acting_as_id:
+                        acting_user = User.objects.get(id=acting_as_id)
+                        clinic = acting_user.clinic_profile
                 except Exception:
                     pass
 
-            # Case 3: Fallback — if superadmin hasn’t switched, deny access
-            raise Exception("No clinic selected. Please provide clinic_id in query or switch clinic.")
+            # fallback
+            if not clinic:
+                clinic = Clinic.objects.first()
 
-        # --- CLINIC USER MODE ---
-        elif getattr(user, "role", "").upper() == "CLINIC":
-            if hasattr(user, "clinic_profile"):
-                return user.clinic_profile
-            raise Exception("This user has no linked clinic.")
+        elif user.role == "CLINIC":
+            try:
+                clinic = user.clinic_profile
+            except Clinic.DoesNotExist:
+                pass
 
-        # --- INVALID ROLE ---
-        raise Exception("Unauthorized role. Access denied.")
+        return clinic
 
-    # -------------------------------
-    # GET → List all doctors in clinic
-    # -------------------------------
+    # --- GET all doctors ---
     def get(self, request):
-        try:
-            clinic = self.get_clinic(request)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
 
         doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    # -------------------------------
-    # POST → Create doctor
-    # -------------------------------
+    # --- POST create doctor ---
     def post(self, request):
-        try:
-            clinic = self.get_clinic(request)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
 
         data = request.data.copy()
         data["clinic"] = clinic.id
-
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
@@ -231,65 +213,52 @@ class DoctorListCreateAPIView(APIView):
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_clinic(self, request):
-        """
-        Reuses the same clinic detection logic as DoctorListCreateAPIView.
-        """
+    def get_clinic_context(self, request):
+        """Same logic as above to maintain consistent behavior."""
         user = request.user
-        clinic_id = request.query_params.get("clinic_id")
+        clinic = None
 
-        # --- SUPERADMIN (switch mode supported) ---
-        if getattr(user, "role", None) == "SUPERADMIN":
-
-            if clinic_id:
-                return get_object_or_404(Clinic, id=clinic_id)
-
-            # fallback: decode token for acting clinic
+        if user.role == "SUPERADMIN":
             auth_header = request.headers.get("Authorization", "")
             token = auth_header.split(" ")[1] if " " in auth_header else None
             if token:
                 try:
-                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
-                    target_id = payload.get("target_id")
-                    if target_id:
-                        acting_user = User.objects.get(id=target_id)
-                        return acting_user.clinic_profile
+                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    acting_as_id = payload.get("target_id")
+                    if acting_as_id:
+                        acting_user = User.objects.get(id=acting_as_id)
+                        clinic = acting_user.clinic_profile
                 except Exception:
                     pass
+            if not clinic:
+                clinic = Clinic.objects.first()
 
-            # fallback: first clinic
-            first_clinic = Clinic.objects.first()
-            if not first_clinic:
-                raise Exception("No clinics found in the system.")
-            return first_clinic
+        elif user.role == "CLINIC":
+            try:
+                clinic = user.clinic_profile
+            except Clinic.DoesNotExist:
+                pass
 
-        # --- CLINIC ROLE ---
-        elif getattr(user, "role", None) == "CLINIC":
-            if not hasattr(user, "clinic_profile"):
-                raise Exception("This user has no linked clinic.")
-            return user.clinic_profile
-
-        raise Exception("Unauthorized access. Only SUPERADMIN or CLINIC users allowed.")
+        return clinic
 
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
+    # --- Retrieve ---
     def get(self, request, pk):
-        try:
-            clinic = self.get_clinic(request)
-            doctor = self.get_object(pk, clinic)
-            serializer = DoctorSerializer(doctor)
-            return Response(serializer.data)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
+        doctor = self.get_object(pk, clinic)
+        serializer = DoctorSerializer(doctor)
+        return Response(serializer.data)
 
+    # --- Update (PUT/PATCH) ---
     def put(self, request, pk):
-        try:
-            clinic = self.get_clinic(request)
-            doctor = self.get_object(pk, clinic)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
-
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
         data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data)
@@ -299,12 +268,10 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        try:
-            clinic = self.get_clinic(request)
-            doctor = self.get_object(pk, clinic)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
-
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
+        doctor = self.get_object(pk, clinic)
         data = request.data.copy()
         data["clinic"] = clinic.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
@@ -313,17 +280,189 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # --- Delete ---
     def delete(self, request, pk):
-        try:
-            clinic = self.get_clinic(request)
-            doctor = self.get_object(pk, clinic)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
-
+        clinic = self.get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "No clinic context found."}, status=403)
+        doctor = self.get_object(pk, clinic)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+# class DoctorListCreateAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_clinic(self, request):
+#         """
+#         Determines which clinic to use based on the logged-in user's role.
+#         SUPERADMIN → can switch clinics using ?clinic_id= or token's target_id.
+#         CLINIC USER → always tied to their clinic_profile.
+#         """
+#         user = request.user
+#         clinic_id = request.query_params.get("clinic_id")
+
+#         # --- SUPERADMIN MODE ---
+#         if getattr(user, "role", "").upper() == "SUPERADMIN":
+#             # Case 1: Explicit clinic_id in query params
+#             if clinic_id:
+#                 return get_object_or_404(Clinic, id=clinic_id)
+
+#             # Case 2: Token contains acting clinic_id (target_id)
+#             auth_header = request.headers.get("Authorization", "")
+#             token = auth_header.split(" ")[1] if " " in auth_header else None
+#             if token:
+#                 try:
+#                     payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+#                     target_id = payload.get("target_id")
+#                     if target_id:
+#                         target_user = User.objects.filter(id=target_id).first()
+#                         if getattr(target_user, "clinic_profile", None):
+#                             return target_user.clinic_profile
+#                 except Exception:
+#                     pass
+
+#             # Case 3: Fallback — if superadmin hasn’t switched, deny access
+#             raise Exception("No clinic selected. Please provide clinic_id in query or switch clinic.")
+
+#         # --- CLINIC USER MODE ---
+#         elif getattr(user, "role", "").upper() == "CLINIC":
+#             if hasattr(user, "clinic_profile"):
+#                 return user.clinic_profile
+#             raise Exception("This user has no linked clinic.")
+
+#         # --- INVALID ROLE ---
+#         raise Exception("Unauthorized role. Access denied.")
+
+#     # -------------------------------
+#     # GET → List all doctors in clinic
+#     # -------------------------------
+#     def get(self, request):
+#         try:
+#             clinic = self.get_clinic(request)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#         doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
+#         serializer = DoctorSerializer(doctors, many=True)
+#         return Response(serializer.data)
+
+#     # -------------------------------
+#     # POST → Create doctor
+#     # -------------------------------
+#     def post(self, request):
+#         try:
+#             clinic = self.get_clinic(request)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#         data = request.data.copy()
+#         data["clinic"] = clinic.id
+
+#         serializer = DoctorSerializer(data=data)
+#         if serializer.is_valid():
+#             doctor = serializer.save()
+#             return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class DoctorRetrieveUpdateDeleteAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_clinic(self, request):
+#         """
+#         Reuses the same clinic detection logic as DoctorListCreateAPIView.
+#         """
+#         user = request.user
+#         clinic_id = request.query_params.get("clinic_id")
+
+#         # --- SUPERADMIN (switch mode supported) ---
+#         if getattr(user, "role", None) == "SUPERADMIN":
+
+#             if clinic_id:
+#                 return get_object_or_404(Clinic, id=clinic_id)
+
+#             # fallback: decode token for acting clinic
+#             auth_header = request.headers.get("Authorization", "")
+#             token = auth_header.split(" ")[1] if " " in auth_header else None
+#             if token:
+#                 try:
+#                     payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
+#                     target_id = payload.get("target_id")
+#                     if target_id:
+#                         acting_user = User.objects.get(id=target_id)
+#                         return acting_user.clinic_profile
+#                 except Exception:
+#                     pass
+
+#             # fallback: first clinic
+#             first_clinic = Clinic.objects.first()
+#             if not first_clinic:
+#                 raise Exception("No clinics found in the system.")
+#             return first_clinic
+
+#         # --- CLINIC ROLE ---
+#         elif getattr(user, "role", None) == "CLINIC":
+#             if not hasattr(user, "clinic_profile"):
+#                 raise Exception("This user has no linked clinic.")
+#             return user.clinic_profile
+
+#         raise Exception("Unauthorized access. Only SUPERADMIN or CLINIC users allowed.")
+
+#     def get_object(self, pk, clinic):
+#         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
+
+#     def get(self, request, pk):
+#         try:
+#             clinic = self.get_clinic(request)
+#             doctor = self.get_object(pk, clinic)
+#             serializer = DoctorSerializer(doctor)
+#             return Response(serializer.data)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#     def put(self, request, pk):
+#         try:
+#             clinic = self.get_clinic(request)
+#             doctor = self.get_object(pk, clinic)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#         data = request.data.copy()
+#         data["clinic"] = clinic.id
+#         serializer = DoctorSerializer(doctor, data=data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def patch(self, request, pk):
+#         try:
+#             clinic = self.get_clinic(request)
+#             doctor = self.get_object(pk, clinic)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#         data = request.data.copy()
+#         data["clinic"] = clinic.id
+#         serializer = DoctorSerializer(doctor, data=data, partial=True)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def delete(self, request, pk):
+#         try:
+#             clinic = self.get_clinic(request)
+#             doctor = self.get_object(pk, clinic)
+#         except Exception as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+#         if doctor.user:
+#             doctor.user.delete()
+#         doctor.delete()
+#         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # -------------------- Patient --------------------
