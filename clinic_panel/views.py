@@ -909,21 +909,65 @@ class AppointmentRetrieveUpdateDeleteAPIView(APIView):
 
 # ------------------------------------------------Prescriptions-------------------------------------------------------------
 
+# class ClinicPrescriptionListAPIView(APIView):
+#     """
+#     List all prescriptions for the logged-in clinic.
+#     """
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get(self, request):
+#         clinic = request.user.clinic_profile
+#         prescriptions = Prescription.objects.filter(
+#             consultation__doctor__clinic=clinic
+#         ).select_related("consultation", "consultation__patient").order_by("-created_at")
+
+#         serializer = ClinicPrescriptionListSerializer(prescriptions, many=True)
+#         return Response(serializer.data)
+
 class ClinicPrescriptionListAPIView(APIView):
     """
-    List all prescriptions for the logged-in clinic.
+    ✅ Clinic user: can only view prescriptions for their clinic.
+    ✅ Superadmin: when switched to a clinic (via ?clinic_id=XYZ), can view that clinic’s prescriptions.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        clinic = request.user.clinic_profile
-        prescriptions = Prescription.objects.filter(
-            consultation__doctor__clinic=clinic
-        ).select_related("consultation", "consultation__patient").order_by("-created_at")
+        user = request.user
+
+        # --- Determine which clinic to fetch prescriptions for ---
+        clinic = None
+
+        # Case 1: Clinic user → use their own clinic profile
+        if hasattr(user, "clinic_profile"):
+            clinic = user.clinic_profile
+
+        # Case 2: Superadmin → use ?clinic_id=XYZ param
+        elif user.role == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return Response(
+                    {"detail": "clinic_id query parameter is required for superadmin."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            clinic = get_object_or_404(Clinic, id=clinic_id)
+
+        # --- If still no clinic found ---
+        if not clinic:
+            return Response(
+                {"detail": "Unable to determine clinic context."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Fetch prescriptions for the clinic ---
+        prescriptions = (
+            Prescription.objects.filter(consultation__doctor__clinic=clinic)
+            .select_related("consultation", "consultation__patient")
+            .order_by("-created_at")
+        )
 
         serializer = ClinicPrescriptionListSerializer(prescriptions, many=True)
         return Response(serializer.data)
-
 
 class ClinicPrescriptionDetailAPIView(APIView):
     """
