@@ -7,8 +7,11 @@ urlpatterns = [
     path("dashboard/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard"),
     path("dashboard/<int:clinic_id>/", ClinicDashboardAPIView.as_view(), name="clinic-dashboard-with-id"),
 
+    #Doctors
     path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
     path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
+
+    path("<int:clinic_id>/doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create-with-id"),
 
     # Patients
     path("patients/", PatientListCreateAPIView.as_view(), name="clinic-patient-list-create"),
