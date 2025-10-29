@@ -94,109 +94,18 @@ class ClinicDashboardAPIView(APIView):
         return Response(data)
 
 # -------------------- Doctor --------------------
-# class DoctorListCreateAPIView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def get(self, request):
-#         # Filter doctors by clinic of logged-in user
-#         doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
-#         serializer = DoctorSerializer(doctors, many=True)
-#         return Response(serializer.data)
-
-#     def post(self, request):
-#         data = request.data.copy()
-#         data["clinic"] = request.user.clinic_profile.id  # assign logged-in clinic
-#         serializer = DoctorSerializer(data=data)
-#         if serializer.is_valid():
-#             doctor = serializer.save()
-#             return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-# class DoctorRetrieveUpdateDeleteAPIView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def get_object(self, pk, clinic):
-#         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
-
-#     def get(self, request, pk):
-#         doctor = self.get_object(pk, request.user.clinic_profile)
-#         serializer = DoctorSerializer(doctor)
-#         return Response(serializer.data)
-
-#     def put(self, request, pk):
-#         doctor = self.get_object(pk, request.user.clinic_profile)
-#         data = request.data.copy()
-#         data["clinic"] = request.user.clinic_profile.id
-#         serializer = DoctorSerializer(doctor, data=data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     def patch(self, request, pk):
-#         doctor = self.get_object(pk, request.user.clinic_profile)
-#         data = request.data.copy()
-#         data["clinic"] = request.user.clinic_profile.id
-#         serializer = DoctorSerializer(doctor, data=data, partial=True)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     def delete(self, request, pk):
-#         doctor = self.get_object(pk, request.user.clinic_profile)
-#         if doctor.user:
-#             doctor.user.delete()
-#         doctor.delete()
-#         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, clinic_id=None):
-        """Get all doctors for a clinic or the logged-in clinic"""
-        user = request.user
-
-        if user.is_superuser:
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
-        else:
-            if not hasattr(user, "clinic_profile"):
-                return Response(
-                    {"detail": "This user is not linked to any clinic."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
-
+    def get(self, request):
+        # Filter doctors by clinic of logged-in user
+        doctors = Doctor.objects.filter(clinic=request.user.clinic_profile).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    def post(self, request, clinic_id=None):
-        """Create doctor for clinic"""
-        user = request.user
+    def post(self, request):
         data = request.data.copy()
-
-        if user.is_superuser:
-            if not clinic_id:
-                return Response(
-                    {"detail": "clinic_id required for superadmin."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            data["clinic"] = clinic_id
-        else:
-            if not hasattr(user, "clinic_profile"):
-                return Response(
-                    {"detail": "This user is not linked to any clinic."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            data["clinic"] = user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id  # assign logged-in clinic
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             doctor = serializer.save()
@@ -207,67 +116,158 @@ class DoctorListCreateAPIView(APIView):
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk, clinic_id, request):
-        """Return the doctor object with correct access control"""
-        user = request.user
+    def get_object(self, pk, clinic):
+        return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
-        if user.is_superuser:
-            if not clinic_id:
-                raise PermissionError("clinic_id required for superadmin.")
-            return get_object_or_404(Doctor, pk=pk, clinic_id=clinic_id)
-        else:
-            if not hasattr(user, "clinic_profile"):
-                raise PermissionError("This user is not linked to any clinic.")
-            return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
-
-    def get(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    def get(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
-    def put(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def put(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def patch(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         data = request.data.copy()
-        data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
-
+        data["clinic"] = request.user.clinic_profile.id
         serializer = DoctorSerializer(doctor, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk, clinic_id=None):
-        try:
-            doctor = self.get_object(pk, clinic_id, request)
-        except PermissionError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    def delete(self, request, pk):
+        doctor = self.get_object(pk, request.user.clinic_profile)
         if doctor.user:
             doctor.user.delete()
         doctor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# class DoctorListCreateAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get(self, request, clinic_id=None):
+#         """Get all doctors for a clinic or the logged-in clinic"""
+#         user = request.user
+
+#         if user.is_superuser:
+#             if not clinic_id:
+#                 return Response(
+#                     {"detail": "clinic_id required for superadmin."},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             doctors = Doctor.objects.filter(clinic_id=clinic_id).order_by("-created_at")
+#         else:
+#             if not hasattr(user, "clinic_profile"):
+#                 return Response(
+#                     {"detail": "This user is not linked to any clinic."},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             doctors = Doctor.objects.filter(clinic=user.clinic_profile).order_by("-created_at")
+
+#         serializer = DoctorSerializer(doctors, many=True)
+#         return Response(serializer.data)
+
+#     def post(self, request, clinic_id=None):
+#         """Create doctor for clinic"""
+#         user = request.user
+#         data = request.data.copy()
+
+#         if user.is_superuser:
+#             if not clinic_id:
+#                 return Response(
+#                     {"detail": "clinic_id required for superadmin."},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             data["clinic"] = clinic_id
+#         else:
+#             if not hasattr(user, "clinic_profile"):
+#                 return Response(
+#                     {"detail": "This user is not linked to any clinic."},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+#             data["clinic"] = user.clinic_profile.id
+
+#         serializer = DoctorSerializer(data=data)
+#         if serializer.is_valid():
+#             doctor = serializer.save()
+#             return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class DoctorRetrieveUpdateDeleteAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_object(self, pk, clinic_id, request):
+#         """Return the doctor object with correct access control"""
+#         user = request.user
+
+#         if user.is_superuser:
+#             if not clinic_id:
+#                 raise PermissionError("clinic_id required for superadmin.")
+#             return get_object_or_404(Doctor, pk=pk, clinic_id=clinic_id)
+#         else:
+#             if not hasattr(user, "clinic_profile"):
+#                 raise PermissionError("This user is not linked to any clinic.")
+#             return get_object_or_404(Doctor, pk=pk, clinic=user.clinic_profile)
+
+#     def get(self, request, pk, clinic_id=None):
+#         try:
+#             doctor = self.get_object(pk, clinic_id, request)
+#         except PermissionError as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#         serializer = DoctorSerializer(doctor)
+#         return Response(serializer.data)
+
+#     def put(self, request, pk, clinic_id=None):
+#         try:
+#             doctor = self.get_object(pk, clinic_id, request)
+#         except PermissionError as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         data = request.data.copy()
+#         data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
+
+#         serializer = DoctorSerializer(doctor, data=data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def patch(self, request, pk, clinic_id=None):
+#         try:
+#             doctor = self.get_object(pk, clinic_id, request)
+#         except PermissionError as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         data = request.data.copy()
+#         data["clinic"] = clinic_id if clinic_id else request.user.clinic_profile.id
+
+#         serializer = DoctorSerializer(doctor, data=data, partial=True)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def delete(self, request, pk, clinic_id=None):
+#         try:
+#             doctor = self.get_object(pk, clinic_id, request)
+#         except PermissionError as e:
+#             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         if doctor.user:
+#             doctor.user.delete()
+#         doctor.delete()
+#         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # -------------------- Patient --------------------
 class PatientListCreateAPIView(APIView):
