@@ -11,8 +11,6 @@ urlpatterns = [
     path("doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create"),
     path("doctors/<int:pk>/", DoctorRetrieveUpdateDeleteAPIView.as_view(), name="clinic-doctor-detail"),
 
-    path("<int:clinic_id>/doctors/", DoctorListCreateAPIView.as_view(), name="clinic-doctor-list-create-with-id"),
-
     # Patients
     path("patients/", PatientListCreateAPIView.as_view(), name="clinic-patient-list-create"),
     path("patients/<int:pk>/", PatientRetrieveUpdateDeleteAPIView.as_view(), name="clinic-patient-detail"),

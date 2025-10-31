@@ -154,108 +154,68 @@ class ClinicDashboardAPIView(APIView):
 class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_clinic_context(self, request, clinic_id=None):
-        """Determine clinic context based on role, token, or explicit ID."""
+    def get_clinic(self, request):
+        """✅ Determine clinic for this request."""
         user = request.user
-        clinic = None
+        if user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")  # superadmin acting as clinic
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+        return getattr(user, "clinic_profile", None)
 
-        # ✅ If clinic_id is passed explicitly (e.g. /api/clinic/<id>/doctors/)
-        if clinic_id:
-            return Clinic.objects.filter(id=clinic_id).first()
-
-        # ✅ If logged-in user is SUPERADMIN (can switch clinic)
-        if user.role.upper() == "SUPERADMIN":
-            auth_header = request.headers.get("Authorization", "")
-            token = auth_header.split(" ")[1] if " " in auth_header else None
-
-            if token:
-                try:
-                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
-                    acting_as_id = payload.get("target_id")
-                    if acting_as_id:
-                        acting_user = User.objects.get(id=acting_as_id)
-                        clinic = getattr(acting_user, "clinic_profile", None)
-                except Exception:
-                    pass
-
-            if not clinic:
-                clinic = Clinic.objects.first()  # fallback (optional)
-
-        # ✅ If logged-in user is CLINIC
-        elif user.role.upper() == "CLINIC":
-            clinic = getattr(user, "clinic_profile", None)
-
-        return clinic
-
-    def get(self, request, clinic_id=None):
-        clinic = self.get_clinic_context(request, clinic_id)
+    def get(self, request):
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
 
         doctors = Doctor.objects.filter(clinic=clinic).order_by("-created_at")
         serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data)
 
-    def post(self, request, clinic_id=None):
-        clinic = self.get_clinic_context(request, clinic_id)
+    def post(self, request):
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
 
         data = request.data.copy()
         data["clinic"] = clinic.id
-
         serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
-            doctor = serializer.save()
-            return Response(DoctorSerializer(doctor).data, status=status.HTTP_201_CREATED)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_clinic_context(self, request):
-        """Determine clinic context same way as list view."""
+    def get_clinic(self, request):
+        """✅ Determine clinic for this request."""
         user = request.user
-        clinic = None
-
-        if user.role.upper() == "SUPERADMIN":
-            auth_header = request.headers.get("Authorization", "")
-            token = auth_header.split(" ")[1] if " " in auth_header else None
-
-            if token:
-                try:
-                    payload = TokenBackend(algorithm="HS256").decode(token, verify=False)
-                    acting_as_id = payload.get("target_id")
-                    if acting_as_id:
-                        acting_user = User.objects.get(id=acting_as_id)
-                        clinic = getattr(acting_user, "clinic_profile", None)
-                except Exception:
-                    pass
-
-            if not clinic:
-                clinic = Clinic.objects.first()
-
-        elif user.role.upper() == "CLINIC":
-            clinic = getattr(user, "clinic_profile", None)
-
-        return clinic
+        if user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+        return getattr(user, "clinic_profile", None)
 
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
 
     def get(self, request, pk):
-        clinic = self.get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
         doctor = self.get_object(pk, clinic)
         serializer = DoctorSerializer(doctor)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        clinic = self.get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
 
         doctor = self.get_object(pk, clinic)
         data = request.data.copy()
@@ -267,9 +227,9 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        clinic = self.get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
 
         doctor = self.get_object(pk, clinic)
         data = request.data.copy()
@@ -281,9 +241,9 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        clinic = self.get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "No clinic context found."}, status=403)
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
 
         doctor = self.get_object(pk, clinic)
         if doctor.user:
