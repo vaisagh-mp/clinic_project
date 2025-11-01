@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
 from clinic_project.permissions import RoleBasedPanelAccess
 from .models import Doctor, Patient, Appointment
 from admin_panel.models import Clinic
@@ -939,25 +940,37 @@ class ClinicPrescriptionDetailAPIView(APIView):
     
 
 class ClinicConsultationListAPIView(APIView):
+
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
+    def get_clinic(self, request):
         user = request.user
 
-        if not hasattr(user, "clinic_profile"):
-            return Response(
-                {"detail": "Only clinic users can access this."}, status=403
-            )
+        # 🔹 Superadmin can view any clinic’s consultations using clinic_id
+        if user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                raise PermissionDenied("clinic_id is required for superadmin.")
+            return get_object_or_404(Clinic, id=clinic_id)
 
-        # Fetch all consultations for patients under this clinic
+        # 🔹 Clinic user can only view their own clinic’s consultations
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        raise PermissionDenied("Only clinic users or superadmins can access this endpoint.")
+
+    def get(self, request):
+        clinic = self.get_clinic(request)
+
+        # 🔹 Fetch all consultations under this clinic
         consultations = Consultation.objects.filter(
-            doctor__clinic=user.clinic_profile
-        ).order_by("-created_at")
+            doctor__clinic=clinic
+        ).select_related("doctor", "patient").order_by("-created_at")
 
-        # Optional: filter by patient_id if provided
+        # 🔹 Optional filter by patient_id
         patient_id = request.query_params.get("patient_id")
         if patient_id:
             consultations = consultations.filter(patient_id=patient_id)
 
         serializer = ConsultationSerializer(consultations, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
