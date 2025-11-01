@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.backends import TokenBackend
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
 from clinic_panel.models import Appointment, Patient
 from .models import Consultation, Prescription, Doctor
@@ -110,49 +111,59 @@ class DoctorDashboardAPIView(APIView):
 class ConsultationListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        doctor = request.user.doctor_profile
+    def get_doctor(self, request):
+        """
+        Determine which doctor to use:
+        - If Superadmin, use ?doctor_id=<id>
+        - If Doctor, use their profile
+        """
+        user = request.user
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+        elif hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+        raise PermissionDenied("Only doctors or superadmins can access consultations.")
 
-        # Scheduled appointments (without consultations yet)
-        scheduled_appointments = Appointment.objects.filter(
-            doctor=doctor,
-            status="SCHEDULED"
-        ).exclude(consultation__isnull=False).select_related("patient", "doctor__clinic").order_by("-appointment_date", "-appointment_time")
+    def get(self, request):
+        doctor = self.get_doctor(request)
+
+        scheduled_appointments = (
+            Appointment.objects.filter(doctor=doctor, status="SCHEDULED")
+            .exclude(consultation__isnull=False)
+            .select_related("patient", "doctor__clinic")
+            .order_by("-appointment_date", "-appointment_time")
+        )
 
         data = []
         for a in scheduled_appointments:
-            # Format date and time nicely
             date_time = f"{a.appointment_date.strftime('%d %b %Y')} - {a.appointment_time.strftime('%I:%M %p')}"
-
-            # Combine first_name + last_name for patient
             patient_name = f"{a.patient.first_name} {a.patient.last_name}".strip()
-
             data.append({
-                "appointment_id": a.id,  # or a.appointment_id
+                "appointment_id": a.id,
                 "date_time": date_time,
                 "patient": patient_name,
-                "patient_id": a.patient.id,       # add this
+                "patient_id": a.patient.id,
                 "doctor": a.doctor.name,
-                "doctor_id": a.doctor.id,         # add this
+                "doctor_id": a.doctor.id,
                 "clinic": a.doctor.clinic.name,
                 "status": a.status,
             })
 
-        # Optional: sort by date and time
         data.sort(key=lambda x: x["date_time"])
-
         return Response(data)
-    
+
     @transaction.atomic
     def post(self, request):
-        doctor = request.user.doctor_profile
+        doctor = self.get_doctor(request)
         patient_id = request.data.get("patient")
         appointment_id = request.data.get("appointment")
 
         patient = get_object_or_404(Patient, id=patient_id, clinic=doctor.clinic)
         appointment = get_object_or_404(Appointment, id=appointment_id, doctor=doctor)
 
-        # Check if consultation already exists
         if hasattr(appointment, "consultation"):
             return Response(
                 {"appointment": ["Consultation for this appointment already exists."]},
@@ -161,20 +172,16 @@ class ConsultationListCreateAPIView(APIView):
 
         serializer = ConsultationSerializer(data=request.data)
         if serializer.is_valid():
-            # Save consultation
             consultation = serializer.save(doctor=doctor, patient=patient, appointment=appointment)
-
-            # Update appointment status
             appointment.status = "COMPLETED"
             appointment.save()
 
-            # Optionally, create default Prescription if sent in request
+            # Optional prescriptions
             prescriptions_data = request.data.get("prescriptions", [])
             for p in prescriptions_data:
                 medicine_name = p.get("medicine_name")
                 procedure_id = p.get("procedure")
-
-                if medicine_name:  # Medicine selected
+                if medicine_name:
                     Prescription.objects.create(
                         consultation=consultation,
                         medicine_name=medicine_name,
@@ -183,7 +190,7 @@ class ConsultationListCreateAPIView(APIView):
                         duration=p.get("duration"),
                         timings=p.get("timings"),
                     )
-                elif procedure_id:  # Procedure selected
+                elif procedure_id:
                     Prescription.objects.create(
                         consultation=consultation,
                         procedure_id=procedure_id,
@@ -194,19 +201,32 @@ class ConsultationListCreateAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class ConsultationRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_doctor(self, request):
+        user = request.user
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id") or request.data.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+        elif hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+        raise PermissionDenied("Only doctors or superadmins can access consultations.")
+
+    def get_object(self, pk, doctor):
+        return get_object_or_404(Consultation, pk=pk, doctor=doctor)
+
     def get(self, request, pk):
-        doctor = request.user.doctor_profile
-        consultation = get_object_or_404(Consultation, pk=pk, doctor=doctor)
+        doctor = self.get_doctor(request)
+        consultation = self.get_object(pk, doctor)
         serializer = ConsultationSerializer(consultation)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        doctor = request.user.doctor_profile
-        consultation = get_object_or_404(Consultation, pk=pk, doctor=doctor)
+        doctor = self.get_doctor(request)
+        consultation = self.get_object(pk, doctor)
         serializer = ConsultationSerializer(consultation, data=request.data)
         if serializer.is_valid():
             serializer.save(doctor=doctor)
@@ -214,8 +234,8 @@ class ConsultationRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        doctor = request.user.doctor_profile
-        consultation = get_object_or_404(Consultation, pk=pk, doctor=doctor)
+        doctor = self.get_doctor(request)
+        consultation = self.get_object(pk, doctor)
         serializer = ConsultationSerializer(consultation, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save(doctor=doctor)
@@ -223,22 +243,34 @@ class ConsultationRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        doctor = request.user.doctor_profile
-        consultation = get_object_or_404(Consultation, pk=pk, doctor=doctor)
+        doctor = self.get_doctor(request)
+        consultation = self.get_object(pk, doctor)
         consultation.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 # -------------------- AllAppointments --------------------
 
 class DoctorAllAppointmentsAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        doctor = request.user.doctor_profile
-        appointments = Appointment.objects.filter(
-            doctor=doctor
-        ).select_related("patient", "doctor__clinic").order_by("-created_at")
+    def get_doctor(self, request):
+        """Get the doctor profile based on role."""
+        user = request.user
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+        elif hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+        raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
 
+    def get(self, request):
+        doctor = self.get_doctor(request)
+        appointments = (
+            Appointment.objects.filter(doctor=doctor)
+            .select_related("patient", "doctor__clinic")
+            .order_by("-created_at")
+        )
         serializer = DoctorAppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
@@ -246,25 +278,52 @@ class DoctorAllAppointmentsAPIView(APIView):
 class DoctorScheduledAppointmentsAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_doctor(self, request):
+        """Get the doctor profile based on role."""
+        user = request.user
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+        elif hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+        raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
+
     def get(self, request):
-        doctor = request.user.doctor_profile
-        # Only appointments without a consultation
-        appointments = Appointment.objects.filter(
-            doctor=doctor,
-            status="SCHEDULED",
-            consultation__isnull=True  # <-- filter out those with consultation
-        ).select_related("patient", "doctor__clinic")
+        doctor = self.get_doctor(request)
+        appointments = (
+            Appointment.objects.filter(
+                doctor=doctor,
+                status="SCHEDULED",
+                consultation__isnull=True,  # only those not yet consulted
+            )
+            .select_related("patient", "doctor__clinic")
+            .order_by("-appointment_date", "-appointment_time")
+        )
 
         serializer = DoctorAppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
 
-
 class DoctorAppointmentDetailAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_doctor(self, request):
+        """Get doctor for current user or superadmin."""
+        user = request.user
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+        elif hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+        raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
+
     def get(self, request, pk):
-        appointment = get_object_or_404(Appointment, pk=pk, doctor=request.user.doctor_profile)
+        doctor = self.get_doctor(request)
+        appointment = get_object_or_404(Appointment, pk=pk, doctor=doctor)
         serializer = DoctorAppointmentSerializer(appointment)
         return Response(serializer.data)
 
@@ -330,22 +389,59 @@ class PrescriptionRetrieveUpdateDeleteAPIView(APIView):
 class DoctorPrescriptionListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_doctor(self, request):
+        user = request.user
+
+        # Superadmin can view any doctor's prescriptions
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+
+        # Doctor user can only view their own
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+
+        raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
+
     def get(self, request):
-        doctor = request.user.doctor_profile
-        prescriptions = Prescription.objects.filter(
-            consultation__doctor=doctor
-        ).order_by('-created_at')  # newest first
+        doctor = self.get_doctor(request)
+
+        prescriptions = (
+            Prescription.objects.filter(consultation__doctor=doctor)
+            .select_related("consultation", "consultation__patient")
+            .order_by("-created_at")
+        )
+
         serializer = PrescriptionListSerializer(prescriptions, many=True)
         return Response(serializer.data)
-    
+
+
 class DoctorPrescriptionDetailAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_doctor(self, request):
+        user = request.user
+
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
+
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile
+
+        raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
+
     def get(self, request, pk):
-        doctor = request.user.doctor_profile
+        doctor = self.get_doctor(request)
+
         prescription = get_object_or_404(
             Prescription, id=pk, consultation__doctor=doctor
         )
+
         serializer = ConsultationSerializer(prescription.consultation)
         return Response(serializer.data)
 
