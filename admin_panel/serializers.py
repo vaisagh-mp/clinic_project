@@ -64,8 +64,6 @@ class DoctorSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         """Ensure email is unique across users."""
-        # Exclude current doctor user if updating
-        doctor_id = self.instance.id if self.instance else None
         qs = User.objects.filter(email=value)
         if self.instance and self.instance.user:
             qs = qs.exclude(id=self.instance.user.id)
@@ -73,10 +71,18 @@ class DoctorSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A user with this email already exists.")
         return value
 
+    def validate(self, data):
+        """✅ Ensure username and password are provided during creation."""
+        if not self.instance:  # Only on create
+            if not data.get("username"):
+                raise serializers.ValidationError({"username": "This field is required."})
+            if not data.get("password"):
+                raise serializers.ValidationError({"password": "This field is required."})
+        return data
+
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
-        
         educations_data = validated_data.pop("educations", [])
         certifications_data = validated_data.pop("certifications", [])
 
