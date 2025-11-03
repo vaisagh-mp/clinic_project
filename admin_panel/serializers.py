@@ -80,27 +80,60 @@ class DoctorSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"password": "This field is required."})
         return data
 
-    def create(self, validated_data):
-        request = self.context.get("request")
-        user = request.user if request else None
+    class PatientSerializer(serializers.ModelSerializer):
+        age = serializers.SerializerMethodField(read_only=True)
+        clinic = serializers.SerializerMethodField(read_only=True)
+        attachment = serializers.FileField(required=False, allow_null=True)
     
-        clinic = None
-        # ✅ Determine clinic like in your view
-        if user:
-            if user.role.lower() == "superadmin":
-                clinic_id = request.query_params.get("clinic_id")
-                if clinic_id:
-                    clinic = Clinic.objects.filter(id=clinic_id).first()
-            elif hasattr(user, "clinic_profile"):
-                clinic = user.clinic_profile
-            elif hasattr(user, "doctor_profile"):
-                clinic = user.doctor_profile.clinic
+        class Meta:
+            model = Patient
+            fields = [
+                "id", "first_name", "last_name", "email", "phone_number",
+                "dob", "age", "gender", "blood_group", "address",
+                "care_of", "clinic", "attachment"
+            ]
+            read_only_fields = ["age", "clinic"]
     
-        if not clinic:
-            raise serializers.ValidationError({"clinic": "Clinic not found or unauthorized."})
+        def get_age(self, obj):
+            if not obj.dob:
+                return None
+            today = date.today()
+            return today.year - obj.dob.year - (
+                (today.month, today.day) < (obj.dob.month, obj.dob.day)
+            )
     
-        validated_data["clinic"] = clinic
-        return super().create(validated_data)
+        def get_clinic(self, obj):
+            if obj.clinic:
+                return obj.clinic.id
+            return None
+    
+        def create(self, validated_data):
+            request = self.context.get("request")
+            user = request.user if request else None
+            clinic = None
+    
+            if user:
+                # ✅ Superadmin using ?clinic_id= in URL
+                if user.role.lower() == "superadmin":
+                    clinic_id = request.query_params.get("clinic_id")
+                    if clinic_id:
+                        clinic = Clinic.objects.filter(id=clinic_id).first()
+    
+                # ✅ Clinic user
+                elif hasattr(user, "clinic_profile"):
+                    clinic = user.clinic_profile
+    
+                # ✅ Doctor user
+                elif hasattr(user, "doctor_profile"):
+                    clinic = getattr(user.doctor_profile, "clinic", None)
+    
+            if not clinic:
+                raise serializers.ValidationError(
+                    {"clinic": "Clinic not found or unauthorized"}
+                )
+    
+            validated_data["clinic"] = clinic
+            return super().create(validated_data)
 
 
     def update(self, instance, validated_data):
