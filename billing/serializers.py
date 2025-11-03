@@ -217,15 +217,15 @@ class LabPanelBillSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
-
-        # Assign clinic automatically from context/user
-        clinic = self.context['request'].user.clinic_profile
+    
+        # ✅ Get clinic either from context or request.user
+        clinic = self.context.get('clinic') or self.context['request'].user.clinic_profile
+    
         bill = LabBill.objects.create(clinic=clinic, **validated_data)
-
+    
         for item_data in items_data:
             LabBillItem.objects.create(bill=bill, **item_data)
-
-        # Update total_amount
+    
         bill.total_amount = sum(item.cost for item in bill.items.all())
         bill.save()
         return bill

@@ -499,17 +499,16 @@ class ClinicLabBillListCreateAPIView(APIView):
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 
-        # ✅ FIX: include request in context
         serializer = LabPanelBillSerializer(
             data=request.data,
             context={"clinic": clinic, "request": request}
         )
 
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
+            # ✅ remove clinic=clinic
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
