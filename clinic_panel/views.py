@@ -892,7 +892,7 @@ class ClinicPrescriptionListAPIView(APIView):
             clinic = user.clinic_profile
 
         # Case 2: Superadmin → use ?clinic_id=XYZ param
-        elif user.role == "superadmin":
+        elif hasattr(user, "role") and user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return Response(
