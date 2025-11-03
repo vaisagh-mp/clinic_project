@@ -921,17 +921,46 @@ class ClinicPrescriptionListAPIView(APIView):
 
 class ClinicPrescriptionDetailAPIView(APIView):
     """
-    Retrieve a single prescription detail for the logged-in clinic.
+    ✅ Clinic user: can only view prescriptions for their clinic.
+    ✅ Superadmin: can view prescriptions by specifying ?clinic_id=XYZ.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
-        clinic = request.user.clinic_profile
+        user = request.user
+        clinic = None
+
+        # --- Case 1: Clinic user ---
+        if hasattr(user, "clinic_profile"):
+            clinic = user.clinic_profile
+
+        # --- Case 2: Superadmin (use clinic_id param) ---
+        elif hasattr(user, "role") and user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return Response(
+                    {"detail": "clinic_id query parameter is required for superadmin."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            clinic = get_object_or_404(Clinic, id=clinic_id)
+
+        # --- If no valid clinic found ---
+        if not clinic:
+            return Response(
+                {"detail": "Unable to determine clinic context."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Fetch prescription linked to this clinic ---
         prescription = get_object_or_404(
-            Prescription, id=pk, consultation__doctor__clinic=clinic
+            Prescription,
+            id=pk,
+            consultation__doctor__clinic=clinic
         )
+
         serializer = ClinicConsultationSerializer(prescription.consultation)
         return Response(serializer.data)
+
     
 
 class ClinicConsultationListAPIView(APIView):
