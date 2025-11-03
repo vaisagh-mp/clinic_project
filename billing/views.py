@@ -600,9 +600,12 @@ class ClinicPharmacyBillListCreateAPIView(APIView):
             data=request.data,
             context={'clinic': clinic}
         )
+
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
+            # ❌ Remove the duplicate 'clinic' argument
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
