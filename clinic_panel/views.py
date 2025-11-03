@@ -175,12 +175,17 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = PatientSerializer(data=request.data, context={"request": request})
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or not authorized"}, status=403)
+
+        data = request.data.copy()
+        data["clinic"] = clinic.id
+        serializer = DoctorSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class DoctorRetrieveUpdateDeleteAPIView(APIView):
@@ -511,18 +516,12 @@ class PatientListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = self.get_clinic(request)
-        if not clinic:
-            return Response({"error": "Clinic not found or unauthorized"}, status=403)
-
-        data = request.data.copy()
-        data["clinic"] = clinic.id  # ✅ Ensures clinic is always set
-
-        serializer = PatientSerializer(data=data)
+        serializer = PatientSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class PatientRetrieveUpdateDeleteAPIView(APIView):
