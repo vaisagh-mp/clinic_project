@@ -486,21 +486,17 @@ class PatientListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """✅ Determine the clinic for this request (superadmin, clinic, doctor)."""
         user = request.user
 
-        # 🔹 Superadmin switching between clinics
         if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if clinic_id:
                 return get_object_or_404(Clinic, id=clinic_id)
             return None
 
-        # 🔹 Clinic user
         if hasattr(user, "clinic_profile"):
             return user.clinic_profile
 
-        # 🔹 Doctor user
         if hasattr(user, "doctor_profile"):
             return getattr(user.doctor_profile, "clinic", None)
 
@@ -520,14 +516,15 @@ class PatientListCreateAPIView(APIView):
         if not clinic:
             return Response({"error": "Clinic not found or unauthorized"}, status=403)
 
-        data = request.data.copy()
-        data["clinic"] = clinic.id  # ✅ Ensures clinic is always set
-
-        serializer = PatientSerializer(data=data)
+        serializer = PatientSerializer(
+            data=request.data,
+            context={"clinic": clinic}  # ✅ Pass clinic in context
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class PatientRetrieveUpdateDeleteAPIView(APIView):

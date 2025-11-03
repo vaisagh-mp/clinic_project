@@ -191,7 +191,6 @@ class ClinicSerializer(serializers.ModelSerializer):
 # -------------------- Patient --------------------
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
-    clinic = serializers.SerializerMethodField(read_only=True)
     attachment = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
@@ -201,7 +200,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "dob", "age", "gender", "blood_group", "address",
             "care_of", "clinic", "attachment"
         ]
-        read_only_fields = ["age", "clinic"]
+        read_only_fields = ["age"]  # ✅ Remove "clinic" from read-only
 
     def get_age(self, obj):
         if not obj.dob:
@@ -211,16 +210,14 @@ class PatientSerializer(serializers.ModelSerializer):
             (today.month, today.day) < (obj.dob.month, obj.dob.day)
         )
 
-    def get_clinic(self, obj):
-        if obj.clinic:
-            return obj.clinic.id  # or return {"id": obj.clinic.id, "name": obj.clinic.name}
-        return None
-
     def create(self, validated_data):
-        request = self.context.get("request")
-        if request and hasattr(request.user, "clinic_profile"):
-            validated_data["clinic"] = request.user.clinic_profile
+        """✅ Always assign clinic from context (not from request data)."""
+        clinic = self.context.get("clinic")
+        if not clinic:
+            raise serializers.ValidationError({"clinic": "Clinic is required."})
+        validated_data["clinic"] = clinic
         return super().create(validated_data)
+
     
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
