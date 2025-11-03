@@ -80,61 +80,25 @@ class DoctorSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"password": "This field is required."})
         return data
 
-    class PatientSerializer(serializers.ModelSerializer):
-        age = serializers.SerializerMethodField(read_only=True)
-        clinic = serializers.SerializerMethodField(read_only=True)
-        attachment = serializers.FileField(required=False, allow_null=True)
-    
-        class Meta:
-            model = Patient
-            fields = [
-                "id", "first_name", "last_name", "email", "phone_number",
-                "dob", "age", "gender", "blood_group", "address",
-                "care_of", "clinic", "attachment"
-            ]
-            read_only_fields = ["age", "clinic"]
-    
-        def get_age(self, obj):
-            if not obj.dob:
-                return None
-            today = date.today()
-            return today.year - obj.dob.year - (
-                (today.month, today.day) < (obj.dob.month, obj.dob.day)
-            )
-    
-        def get_clinic(self, obj):
-            if obj.clinic:
-                return obj.clinic.id
-            return None
-    
-        def create(self, validated_data):
-            request = self.context.get("request")
-            user = request.user if request else None
-            clinic = None
-    
-            if user:
-                # ✅ Superadmin using ?clinic_id= in URL
-                if user.role.lower() == "superadmin":
-                    clinic_id = request.query_params.get("clinic_id")
-                    if clinic_id:
-                        clinic = Clinic.objects.filter(id=clinic_id).first()
-    
-                # ✅ Clinic user
-                elif hasattr(user, "clinic_profile"):
-                    clinic = user.clinic_profile
-    
-                # ✅ Doctor user
-                elif hasattr(user, "doctor_profile"):
-                    clinic = getattr(user.doctor_profile, "clinic", None)
-    
-            if not clinic:
-                raise serializers.ValidationError(
-                    {"clinic": "Clinic not found or unauthorized"}
-                )
-    
-            validated_data["clinic"] = clinic
-            return super().create(validated_data)
+    def create(self, validated_data):
+        username = validated_data.pop("username")
+        password = validated_data.pop("password")
+        educations_data = validated_data.pop("educations", [])
+        certifications_data = validated_data.pop("certifications", [])
 
+        email = validated_data.get("email")
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "A user with this email already exists."})
+
+        user = User.objects.create_user(username=username, password=password, email=email, role="DOCTOR")
+        doctor = Doctor.objects.create(user=user, **validated_data)
+
+        for edu in educations_data:
+            Education.objects.create(doctor=doctor, **edu)
+        for cert in certifications_data:
+            Certification.objects.create(doctor=doctor, **cert)
+
+        return doctor
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
@@ -249,14 +213,37 @@ class PatientSerializer(serializers.ModelSerializer):
 
     def get_clinic(self, obj):
         if obj.clinic:
-            return obj.clinic.id  # or return {"id": obj.clinic.id, "name": obj.clinic.name}
+            return obj.clinic.id
         return None
 
     def create(self, validated_data):
         request = self.context.get("request")
-        if request and hasattr(request.user, "clinic_profile"):
-            validated_data["clinic"] = request.user.clinic_profile
+        user = request.user if request else None
+        clinic = None
+
+        if user:
+            # ✅ Superadmin using ?clinic_id= in URL
+            if user.role.lower() == "superadmin":
+                clinic_id = request.query_params.get("clinic_id")
+                if clinic_id:
+                    clinic = Clinic.objects.filter(id=clinic_id).first()
+
+            # ✅ Clinic user
+            elif hasattr(user, "clinic_profile"):
+                clinic = user.clinic_profile
+
+            # ✅ Doctor user
+            elif hasattr(user, "doctor_profile"):
+                clinic = getattr(user.doctor_profile, "clinic", None)
+
+        if not clinic:
+            raise serializers.ValidationError(
+                {"clinic": "Clinic not found or unauthorized"}
+            )
+
+        validated_data["clinic"] = clinic
         return super().create(validated_data)
+
     
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
