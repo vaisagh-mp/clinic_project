@@ -81,24 +81,27 @@ class DoctorSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        username = validated_data.pop("username")
-        password = validated_data.pop("password")
-        educations_data = validated_data.pop("educations", [])
-        certifications_data = validated_data.pop("certifications", [])
+        request = self.context.get("request")
+        user = request.user if request else None
+    
+        clinic = None
+        # ✅ Determine clinic like in your view
+        if user:
+            if user.role.lower() == "superadmin":
+                clinic_id = request.query_params.get("clinic_id")
+                if clinic_id:
+                    clinic = Clinic.objects.filter(id=clinic_id).first()
+            elif hasattr(user, "clinic_profile"):
+                clinic = user.clinic_profile
+            elif hasattr(user, "doctor_profile"):
+                clinic = user.doctor_profile.clinic
+    
+        if not clinic:
+            raise serializers.ValidationError({"clinic": "Clinic not found or unauthorized."})
+    
+        validated_data["clinic"] = clinic
+        return super().create(validated_data)
 
-        email = validated_data.get("email")
-        if email and User.objects.filter(email=email).exists():
-            raise serializers.ValidationError({"email": "A user with this email already exists."})
-
-        user = User.objects.create_user(username=username, password=password, email=email, role="DOCTOR")
-        doctor = Doctor.objects.create(user=user, **validated_data)
-
-        for edu in educations_data:
-            Education.objects.create(doctor=doctor, **edu)
-        for cert in certifications_data:
-            Certification.objects.create(doctor=doctor, **cert)
-
-        return doctor
 
     def update(self, instance, validated_data):
         username = validated_data.pop("username", None)
@@ -191,6 +194,7 @@ class ClinicSerializer(serializers.ModelSerializer):
 # -------------------- Patient --------------------
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
+    clinic = serializers.SerializerMethodField(read_only=True)
     attachment = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
@@ -200,7 +204,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "dob", "age", "gender", "blood_group", "address",
             "care_of", "clinic", "attachment"
         ]
-        read_only_fields = ["age"]  # ✅ Remove "clinic" from read-only
+        read_only_fields = ["age", "clinic"]
 
     def get_age(self, obj):
         if not obj.dob:
@@ -210,14 +214,16 @@ class PatientSerializer(serializers.ModelSerializer):
             (today.month, today.day) < (obj.dob.month, obj.dob.day)
         )
 
-    def create(self, validated_data):
-        """✅ Always assign clinic from context (not from request data)."""
-        clinic = self.context.get("clinic")
-        if not clinic:
-            raise serializers.ValidationError({"clinic": "Clinic is required."})
-        validated_data["clinic"] = clinic
-        return super().create(validated_data)
+    def get_clinic(self, obj):
+        if obj.clinic:
+            return obj.clinic.id  # or return {"id": obj.clinic.id, "name": obj.clinic.name}
+        return None
 
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and hasattr(request.user, "clinic_profile"):
+            validated_data["clinic"] = request.user.clinic_profile
+        return super().create(validated_data)
     
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
