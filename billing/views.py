@@ -499,8 +499,12 @@ class ClinicLabBillListCreateAPIView(APIView):
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 
-        # Pass clinic in context
-        serializer = LabPanelBillSerializer(data=request.data, context={"clinic": clinic})
+        # ✅ FIX: include request in context
+        serializer = LabPanelBillSerializer(
+            data=request.data,
+            context={"clinic": clinic, "request": request}
+        )
+
         if serializer.is_valid():
             serializer.save(clinic=clinic)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
