@@ -970,8 +970,7 @@ class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView)
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        clinic = get_user_clinic(user)
+        clinic = get_user_clinic(self.request)
 
         # ✅ Superadmin access
         if clinic == "ALL":
