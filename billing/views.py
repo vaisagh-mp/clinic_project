@@ -918,8 +918,7 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        clinic = get_user_clinic(user)
+        clinic = get_user_clinic(self.request)  # ✅ FIXED (was user before)
 
         # ✅ Superadmin can view all or specific clinic data
         if clinic == "ALL":
@@ -940,8 +939,7 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
             raise PermissionDenied("This user has no clinic assigned.")
 
     def perform_create(self, serializer):
-        user = self.request.user
-        clinic = get_user_clinic(user)
+        clinic = get_user_clinic(self.request)  # ✅ FIXED
 
         # ✅ Superadmin: must provide clinic_id
         if clinic == "ALL":
