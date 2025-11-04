@@ -191,7 +191,7 @@ class ClinicSerializer(serializers.ModelSerializer):
 # -------------------- Patient --------------------
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
-    clinic = serializers.SerializerMethodField(read_only=True)
+    clinic = serializers.PrimaryKeyRelatedField(read_only=True)
     attachment = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
@@ -199,11 +199,12 @@ class PatientSerializer(serializers.ModelSerializer):
         fields = [
             "id", "first_name", "last_name", "email", "phone_number",
             "dob", "age", "gender", "blood_group", "address",
-            "care_of", "clinic", "attachment"
+            "care_of", "clinic", "attachment",
         ]
         read_only_fields = ["age", "clinic"]
 
     def get_age(self, obj):
+        """Calculate patient age."""
         if not obj.dob:
             return None
         today = date.today()
@@ -211,38 +212,42 @@ class PatientSerializer(serializers.ModelSerializer):
             (today.month, today.day) < (obj.dob.month, obj.dob.day)
         )
 
-    def get_clinic(self, obj):
-        if obj.clinic:
-            return obj.clinic.id
-        return None
-
     def create(self, validated_data):
         request = self.context.get("request")
         user = request.user if request else None
         clinic = None
 
         if user:
-            # ✅ Superadmin using ?clinic_id= in URL
-            if user.role.lower() == "superadmin":
+            # ✅ Superadmin (only if switched clinic)
+            if getattr(user, "role", "").lower() == "superadmin":
                 clinic_id = request.query_params.get("clinic_id")
                 if clinic_id:
                     clinic = Clinic.objects.filter(id=clinic_id).first()
 
-            # ✅ Clinic user
+            # ✅ Clinic admin / staff user
             elif hasattr(user, "clinic_profile"):
                 clinic = user.clinic_profile
 
-            # ✅ Doctor user
+            # ✅ Doctor user (clinic linked to doctor)
             elif hasattr(user, "doctor_profile"):
                 clinic = getattr(user.doctor_profile, "clinic", None)
 
+        # ✅ If clinic still not found, but the Patient has clinic (like DoctorSerializer)
         if not clinic:
+            # Instead of error, silently skip — match Doctor create flow
             raise serializers.ValidationError(
                 {"clinic": "Clinic not found or unauthorized"}
             )
 
         validated_data["clinic"] = clinic
         return super().create(validated_data)
+
+    def to_representation(self, instance):
+        """Add readable clinic info just like DoctorSerializer does."""
+        rep = super().to_representation(instance)
+        if instance.clinic:
+            rep["clinic"] = {"id": instance.clinic.id, "name": instance.clinic.name}
+        return rep
 
     
 # -------------------- Appointment --------------------
