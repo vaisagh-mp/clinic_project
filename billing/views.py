@@ -970,7 +970,7 @@ class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView)
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        clinic = get_user_clinic(self.request)
+        clinic = get_user_clinic(self.request)  # ✅ FIXED
 
         # ✅ Superadmin access
         if clinic == "ALL":
@@ -988,3 +988,4 @@ class ClinicProcedurePaymentDetailAPIView(generics.RetrieveUpdateDestroyAPIView)
             ).select_related("bill_item__bill", "bill_item__procedure")
 
         raise PermissionDenied("This user has no clinic assigned.")
+
