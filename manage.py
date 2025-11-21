@@ -2,10 +2,15 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+import dotenv
 
 
 def main():
     """Run administrative tasks."""
+
+     # ✅ Load environment variables from .env file
+    dotenv.load_dotenv()
+    
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'clinic_project.settings')
     try:
         from django.core.management import execute_from_command_line
