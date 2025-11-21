@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from datetime import date
+from .models import Appointment, Patient
 from doctor_panel.models import Prescription, Consultation
 from doctor_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer
 
@@ -83,3 +84,48 @@ class ClinicConsultationSerializer(serializers.ModelSerializer):
         prescriptions = obj.prescriptions.all()
         return ClinicPrescriptionListSerializer(prescriptions, many=True).data
 
+
+
+
+class PatientHistoryAppointmentSerializer(serializers.ModelSerializer):
+    doctor = DoctorSerializer(read_only=True)
+    clinic = ClinicSerializer(read_only=True)
+    patient = PatientSerializer(read_only=True)
+
+    consultation = ClinicConsultationSerializer(read_only=True)
+
+    class Meta:
+        model = Appointment
+        fields = [
+            "id",
+            "appointment_id",
+            "appointment_date",
+            "appointment_time",
+            "reason",
+            "status",
+            "notes",
+            "doctor",
+            "clinic",
+            "patient",
+            "consultation",
+        ]
+
+
+class PatientHistorySerializer(serializers.ModelSerializer):
+    appointments = PatientHistoryAppointmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Patient
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "phone_number",
+            "email",
+            "dob",
+            "gender",
+            "blood_group",
+            "address",
+            "care_of",
+            "appointments",
+        ]

@@ -14,6 +14,7 @@ urlpatterns = [
     # Patients
     path("patients/", PatientListCreateAPIView.as_view(), name="clinic-patient-list-create"),
     path("patients/<int:pk>/", PatientRetrieveUpdateDeleteAPIView.as_view(), name="clinic-patient-detail"),
+    path("patients/<int:id>/history/", PatientHistoryView.as_view(), name="patient-history"),
 
     # Appointments
     path("appointments/", AppointmentListCreateAPIView.as_view(), name="clinic-appointment-list-create"),

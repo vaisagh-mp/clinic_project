@@ -1,6 +1,7 @@
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import RetrieveAPIView 
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
@@ -10,9 +11,10 @@ from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
-from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer
+from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer, PatientHistorySerializer
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.backends import TokenBackend
+from rest_framework.permissions import IsAuthenticated
 
 
 User = get_user_model()
@@ -998,3 +1000,12 @@ class ClinicConsultationListAPIView(APIView):
 
         serializer = ConsultationSerializer(consultations, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+   
+class PatientHistoryView(RetrieveAPIView):
+    queryset = Patient.objects.prefetch_related(
+        "appointments__consultation__prescriptions"
+    ).select_related("clinic")
+    serializer_class = PatientHistorySerializer
+    permission_classes = [IsAuthenticated]
+
+    lookup_field = "id"
