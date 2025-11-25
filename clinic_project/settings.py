@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import boto3
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     "clinic_panel",
     "doctor_panel",
     "billing",
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -194,3 +196,26 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'vaisaghmp3@gmail.com'
 EMAIL_HOST_PASSWORD = 'fpie nque luuj hyac'
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# from django.core.exceptions import ImproperlyConfigured
+# ENVIRONMENT = os.environ.get("ENV", "local")   # local | production
+
+# if ENVIRONMENT == "production":
+#     ssm = boto3.client('ssm', region_name='ap-south-1')
+#     PERPLEXITY_API_KEY = ssm.get_parameter(
+#         Name='/clinic/PERPLEXITY_API_KEY',
+#         WithDecryption=True
+#     )['Parameter']['Value']
+# else:
+#     # Load from .env for local development
+#     PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
+# if not PERPLEXITY_API_KEY:
+#     raise ImproperlyConfigured("PERPLEXITY_API_KEY is missing")
+
+ssm = boto3.client('ssm', region_name='ap-south-1')
+
+PERPLEXITY_API_KEY = ssm.get_parameter(
+    Name='/clinic/PERPLEXITY_API_KEY',
+    WithDecryption=True
+)['Parameter']['Value']
