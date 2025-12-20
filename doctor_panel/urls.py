@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (DoctorDashboardAPIView,
     ConsultationListCreateAPIView, ConsultationRetrieveUpdateDeleteAPIView,
-    PrescriptionListCreateAPIView, PrescriptionRetrieveUpdateDeleteAPIView, DoctorAllAppointmentsAPIView, DoctorPrescriptionListAPIView, DoctorPrescriptionDetailAPIView, DoctorAppointmentDetailAPIView, DoctorScheduledAppointmentsAPIView
+    PrescriptionListCreateAPIView, PrescriptionRetrieveUpdateDeleteAPIView, DoctorAllAppointmentsAPIView, DoctorPrescriptionListAPIView, DoctorPrescriptionDetailAPIView, DoctorAppointmentDetailAPIView, DoctorScheduledAppointmentsAPIView, DoctorPatientHistoryView
 )
 
 app_name = "doctor_panel"
@@ -26,5 +26,6 @@ urlpatterns = [
     path("prescriptions/", DoctorPrescriptionListAPIView.as_view(), name="doctor-prescription-list"),
     path("prescriptions/<int:pk>/", DoctorPrescriptionDetailAPIView.as_view(), name="doctor-prescription-detail"),
     
+    path("patients/<int:id>/history/", DoctorPatientHistoryView.as_view(), name="doctor-patient-history")
 
 ]

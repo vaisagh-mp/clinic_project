@@ -112,11 +112,19 @@ class PatientHistoryAppointmentSerializer(serializers.ModelSerializer):
 
 
 class PatientHistorySerializer(serializers.ModelSerializer):
-    appointments = PatientHistoryAppointmentSerializer(many=True, read_only=True)
+    appointments = PatientHistoryAppointmentSerializer(
+        many=True,
+        read_only=True
+    )
+
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = Patient
         fields = [
+            # -------------------------
+            # Core Patient Info
+            # -------------------------
             "id",
             "first_name",
             "last_name",
@@ -127,5 +135,35 @@ class PatientHistorySerializer(serializers.ModelSerializer):
             "blood_group",
             "address",
             "care_of",
+
+            # -------------------------
+            # New Optional Fields
+            # -------------------------
+            "guardian_name",
+            "occupation",
+            "daily_medication",
+            "drug_allergy",
+            "relative_name",
+            "relationship_with_patient",
+            "file_number",
+
+            # -------------------------
+            # Related Data
+            # -------------------------
+            "attachments",
             "appointments",
         ]
+
+    def get_attachments(self, obj):
+        """
+        Return patient attachments (files)
+        """
+        return [
+            {
+                "id": attachment.id,
+                "file": attachment.file.url if attachment.file else None,
+                "uploaded_at": attachment.uploaded_at,
+            }
+            for attachment in obj.attachments.all()
+        ]
+

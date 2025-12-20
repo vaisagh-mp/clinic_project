@@ -197,7 +197,7 @@ EMAIL_HOST_USER = 'vaisaghmp3@gmail.com'
 EMAIL_HOST_PASSWORD = 'fpie nque luuj hyac'
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-# from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured
 # ENVIRONMENT = os.environ.get("ENV", "local")   # local | production
 
 # if ENVIRONMENT == "production":

@@ -21,10 +21,14 @@ class Consultation(BaseModel):
         related_name="consultation"
     )
 
-    # General notes
+    # -------------------------
+    # General Notes
+    # -------------------------
     notes = models.TextField(blank=True, null=True)
 
+    # -------------------------
     # Vitals
+    # -------------------------
     temperature = models.CharField(max_length=10, blank=True, null=True)
     pulse = models.CharField(max_length=10, blank=True, null=True)
     respiratory_rate = models.CharField(max_length=10, blank=True, null=True)
@@ -36,22 +40,70 @@ class Consultation(BaseModel):
     blood_pressure = models.CharField(max_length=20, blank=True, null=True)
     heart_rate = models.CharField(max_length=10, blank=True, null=True)
 
-    # Complaint, Diagnosis, Advice, Investigation
+    # -------------------------
+    # Clinical Information
+    # -------------------------
     complaints = models.TextField(blank=True, null=True)
+    findings = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Clinical findings / observations"
+    )
     diagnosis = models.TextField(blank=True, null=True)
-    advices = models.TextField(blank=True, null=True)
     investigations = models.TextField(blank=True, null=True)
 
-    allergies = models.TextField(blank=True, null=True, help_text="Mention any drug/food/environmental allergies")
+    # -------------------------
+    # Treatment
+    # -------------------------
+    treatment_plan = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Planned treatment approach"
+    )
+    treatment_done = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Treatment actually performed"
+    )
+    advices = models.TextField(blank=True, null=True)
 
-    # Follow up
+    # -------------------------
+    # Allergies
+    # -------------------------
+    allergies = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Drug / food / environmental allergies"
+    )
+
+    # -------------------------
+    # Referral
+    # -------------------------
+    referred_to = models.ForeignKey(
+        Doctor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referred_consultations",
+        help_text="Referred doctor if patient is referred"
+    )
+    referral_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Reason for referral"
+    )
+
+    # -------------------------
+    # Follow-up
+    # -------------------------
     next_consultation = models.DateField(blank=True, null=True)
     empty_stomach_required = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.doctor} -> {self.patient} ({self.created_at.date()})"
+        return f"{self.doctor} → {self.patient} ({self.created_at.date()})"
+
     
 class Prescription(BaseModel):
     FREQUENCY_CHOICES = [

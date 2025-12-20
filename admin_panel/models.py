@@ -32,6 +32,10 @@ class Clinic(BaseModel):
     website = models.URLField(blank=True, null=True)
     type = models.CharField(max_length=50, choices=CLINIC_TYPES, default="GENERAL")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    file_number_start = models.PositiveIntegerField(
+        default=6000,
+        help_text="Starting file number for patients"
+    )
 
     user = models.OneToOneField(
         User,

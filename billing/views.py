@@ -173,50 +173,167 @@ class ClinicBillRetrieveUpdateDeleteAPIView(APIView):
 class LabBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_clinic(self, request):
+        user = request.user
+
+        if getattr(user, "role", "").lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile.clinic
+
+        return None
+
     def get(self, request):
-        bills = LabBill.objects.all().order_by("-created_at")
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response(
+                {"detail": "Clinic not found or unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        bills = (
+            LabBill.objects
+            .filter(clinic=clinic)
+            .order_by("-created_at")
+        )
+
         serializer = LabBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = LabBillSerializer(data=request.data)
+        serializer = LabBillSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabBillSerializer(bill).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
 
 
 class LabBillRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, pk):
-        return get_object_or_404(LabBill, pk=pk)
+    def get_clinic(self, request):
+        user = request.user
+
+        if getattr(user, "role", "").lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile.clinic
+
+        return None
+
+    def get_object(self, pk, clinic):
+        return get_object_or_404(
+            LabBill,
+            pk=pk,
+            clinic=clinic
+        )
 
     def get(self, request, pk):
-        bill = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response(
+                {"detail": "Clinic not found or unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        bill = self.get_object(pk, clinic)
         serializer = LabBillSerializer(bill)
         return Response(serializer.data)
 
     def put(self, request, pk):
-        bill = self.get_object(pk)
-        serializer = LabBillSerializer(bill, data=request.data)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response(
+                {"detail": "Clinic not found or unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        bill = self.get_object(pk, clinic)
+
+        serializer = LabBillSerializer(
+            bill,
+            data=request.data,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabBillSerializer(bill).data
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     def patch(self, request, pk):
-        bill = self.get_object(pk)
-        serializer = LabBillSerializer(bill, data=request.data, partial=True)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response(
+                {"detail": "Clinic not found or unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        bill = self.get_object(pk, clinic)
+
+        serializer = LabBillSerializer(
+            bill,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabBillSerializer(bill).data
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     def delete(self, request, pk):
-        bill = self.get_object(pk)
+        clinic = self.get_clinic(request)
+        if not clinic:
+            return Response(
+                {"detail": "Clinic not found or unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        bill = self.get_object(pk, clinic)
         bill.delete()
+
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 
 # -------------------- Pharmacy Bill --------------------
@@ -476,52 +593,77 @@ class ClinicLabBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """ Determine clinic based on user role."""
         user = request.user
-        if user.role.lower() == "superadmin":
+
+        if getattr(user, "role", "").lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
             return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile.clinic
+
+        return None
 
     def get(self, request):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        bills = LabBill.objects.filter(clinic=clinic).order_by("-created_at")
+        bills = (
+            LabBill.objects
+            .filter(clinic=clinic)
+            .order_by("-created_at")
+        )
+
         serializer = LabPanelBillSerializer(bills, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = self.get_clinic(request)
-        if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
-
         serializer = LabPanelBillSerializer(
             data=request.data,
-            context={"clinic": clinic, "request": request}
+            context={"request": request}
         )
 
         if serializer.is_valid():
-            # ✅ remove clinic=clinic
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabPanelBillSerializer(bill).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
 
 class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """ Superadmin can switch clinic via ?clinic_id=, clinic user uses their own."""
         user = request.user
-        if user.role.lower() == "superadmin":
+
+        if getattr(user, "role", "").lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
             return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        if hasattr(user, "doctor_profile"):
+            return user.doctor_profile.clinic
+
+        return None
 
     def get_object(self, pk, clinic):
         return get_object_or_404(LabBill, pk=pk, clinic=clinic)
@@ -529,7 +671,10 @@ class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
     def get(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         bill = self.get_object(pk, clinic)
         serializer = LabPanelBillSerializer(bill)
@@ -538,34 +683,69 @@ class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
     def put(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         bill = self.get_object(pk, clinic)
-        serializer = LabPanelBillSerializer(bill, data=request.data, context={"clinic": clinic})
+
+        serializer = LabPanelBillSerializer(
+            bill,
+            data=request.data,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabPanelBillSerializer(bill).data
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     def patch(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         bill = self.get_object(pk, clinic)
-        serializer = LabPanelBillSerializer(bill, data=request.data, partial=True, context={"clinic": clinic})
+
+        serializer = LabPanelBillSerializer(
+            bill,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save(clinic=clinic)
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            bill = serializer.save()
+            return Response(
+                LabPanelBillSerializer(bill).data
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     def delete(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         bill = self.get_object(pk, clinic)
         bill.delete()
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

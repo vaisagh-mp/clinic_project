@@ -163,16 +163,76 @@ class ConsultationSerializer(serializers.ModelSerializer):
     prescriptions = PrescriptionListSerializer(many=True, read_only=True)
     patient = PatientSerializer(read_only=True)
     doctor = DoctorSerializer(read_only=True)
+
+    referred_to = DoctorSerializer(read_only=True)
     clinic = serializers.SerializerMethodField()
 
     class Meta:
         model = Consultation
         fields = [
-            "id", "doctor", "patient", "clinic", "appointment",
-            "notes", "advices", "temperature", "pulse", "respiratory_rate", "spo2",
-            "height", "weight", "bmi", "waist", "blood_pressure", "heart_rate",
-            "complaints", "diagnosis", "investigations", "allergies",
-            "next_consultation", "empty_stomach_required",
+            # -------------------------
+            # Core
+            # -------------------------
+            "id",
+            "doctor",
+            "patient",
+            "clinic",
+            "appointment",
+
+            # -------------------------
+            # General Notes
+            # -------------------------
+            "notes",
+
+            # -------------------------
+            # Vitals
+            # -------------------------
+            "temperature",
+            "pulse",
+            "respiratory_rate",
+            "spo2",
+            "height",
+            "weight",
+            "bmi",
+            "waist",
+            "blood_pressure",
+            "heart_rate",
+
+            # -------------------------
+            # Clinical Information
+            # -------------------------
+            "complaints",
+            "findings",
+            "diagnosis",
+            "investigations",
+
+            # -------------------------
+            # Treatment
+            # -------------------------
+            "treatment_plan",
+            "treatment_done",
+            "advices",
+
+            # -------------------------
+            # Allergies
+            # -------------------------
+            "allergies",
+
+            # -------------------------
+            # Referral
+            # -------------------------
+            "referred_to",
+            "referral_notes",
+
+            # -------------------------
+            # Follow-up
+            # -------------------------
+            "next_consultation",
+            "empty_stomach_required",
+
+            # -------------------------
+            # Prescriptions
+            # -------------------------
             "prescriptions",
         ]
 

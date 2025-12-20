@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     MaterialPurchaseBill, MaterialPurchaseItem,
     ClinicBill, ClinicBillItem,
-    LabBill, LabBillItem,
+    LabBill,
     Medicine, Procedure,
     PharmacyBill, PharmacyBillItem, ProcedurePayment
 )
@@ -19,10 +19,6 @@ class ClinicBillItemInline(admin.TabularInline):
     model = ClinicBillItem
     extra = 1
 
-
-class LabBillItemInline(admin.TabularInline):
-    model = LabBillItem
-    extra = 1
 
 
 class ProcedurePaymentInline(admin.TabularInline):
@@ -60,7 +56,6 @@ class LabBillAdmin(admin.ModelAdmin):
     list_display = ("bill_number", "clinic", "lab_name", "total_amount", "status", "bill_date")
     search_fields = ("bill_number", "lab_name")
     list_filter = ("status", "bill_date")
-    inlines = [LabBillItemInline]
 
 
 @admin.register(PharmacyBill)

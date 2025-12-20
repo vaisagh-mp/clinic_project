@@ -6,6 +6,7 @@ from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 from clinic_project.permissions import RoleBasedPanelAccess
+from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Doctor, Patient, Appointment
 from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
@@ -486,96 +487,192 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
 
 class PatientListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_clinic(self, request):
-        """✅ Determine the clinic for this request."""
+        """
+        Determine clinic for this request.
+        Superadmin must pass clinic_id as query param.
+        """
         user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")  # Superadmin switched clinic
+
+        if getattr(user, "role", "").lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
             return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+
+        # Clinic admin / staff
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        # Doctor
+        if hasattr(user, "doctor_profile"):
+            return getattr(user.doctor_profile, "clinic", None)
+
+        return None
 
     def get(self, request):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         patients = Patient.objects.filter(clinic=clinic).order_by("-created_at")
+
         serializer = PatientSerializer(patients, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = PatientSerializer(data=request.data, context={"request": request})
+        serializer = PatientSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            patient = serializer.save()
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 
 class PatientRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_clinic(self, request):
-        """✅ Determine the clinic for this request."""
+        """
+        Determine the clinic for this request.
+        Superadmin must pass clinic_id as query param.
+        """
         user = request.user
-        if user.role.lower() == "superadmin":
+
+        if getattr(user, "role", "").lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
             return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+
+        if hasattr(user, "clinic_profile"):
+            return user.clinic_profile
+
+        if hasattr(user, "doctor_profile"):
+            return getattr(user.doctor_profile, "clinic", None)
+
+        return None
 
     def get_object(self, pk, clinic):
-        return get_object_or_404(Patient, pk=pk, clinic=clinic)
+        return get_object_or_404(
+            Patient.objects.prefetch_related("attachments"),
+            pk=pk,
+            clinic=clinic
+        )
 
+    # -------------------------
+    # Retrieve
+    # -------------------------
     def get(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         patient = self.get_object(pk, clinic)
         serializer = PatientSerializer(patient)
         return Response(serializer.data)
 
+    # -------------------------
+    # Full Update (PUT)
+    # -------------------------
     def put(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         patient = self.get_object(pk, clinic)
-        data = request.data.copy()
-        data["clinic"] = clinic.id
-        serializer = PatientSerializer(patient, data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        serializer = PatientSerializer(
+            patient,
+            data=request.data,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            patient = serializer.save()
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # -------------------------
+    # Partial Update (PATCH)
+    # -------------------------
     def patch(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         patient = self.get_object(pk, clinic)
-        data = request.data.copy()
-        data["clinic"] = clinic.id
-        serializer = PatientSerializer(patient, data=data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        serializer = PatientSerializer(
+            patient,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            patient = serializer.save()
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # -------------------------
+    # Delete
+    # -------------------------
     def delete(self, request, pk):
         clinic = self.get_clinic(request)
         if not clinic:
-            return Response({"error": "Clinic not found or not authorized"}, status=403)
+            return Response(
+                {"detail": "Clinic not found or not authorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         patient = self.get_object(pk, clinic)
         patient.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(
+            {"detail": "Patient deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT
+        )
 # -------------------- Appointment --------------------
 # class AppointmentListCreateAPIView(APIView):
 #     permission_classes = [permissions.IsAuthenticated]

@@ -1,11 +1,15 @@
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import RetrieveAPIView
 from rest_framework_simplejwt.backends import TokenBackend
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Prefetch
 from clinic_panel.models import Appointment, Patient
+from clinic_panel.serializers import PatientHistorySerializer
 from .models import Consultation, Prescription, Doctor
 from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer
 from .serializers import DoctorAppointmentSerializer
@@ -13,6 +17,7 @@ from admin_panel.serializers import AppointmentSerializer
 from django.db import transaction
 from clinic_project.permissions import RoleBasedPanelAccess
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 User = get_user_model()
 
@@ -279,27 +284,53 @@ class DoctorScheduledAppointmentsAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_doctor(self, request):
-        """Get the doctor profile based on role."""
         user = request.user
         if user.role.lower() == "superadmin":
             doctor_id = request.query_params.get("doctor_id")
             if not doctor_id:
                 raise PermissionDenied("doctor_id is required for superadmin.")
             return get_object_or_404(Doctor, id=doctor_id)
-        elif hasattr(user, "doctor_profile"):
+
+        if hasattr(user, "doctor_profile"):
             return user.doctor_profile
+
         raise PermissionDenied("Only doctors or superadmins can access this endpoint.")
+
+    def cancel_expired_appointments(self, doctor):
+        """
+        Auto-cancel appointments that crossed date/time
+        and have no consultation.
+        """
+        now = timezone.localtime()
+        today = now.date()
+        current_time = now.time()
+
+        Appointment.objects.filter(
+            doctor=doctor,
+            status="SCHEDULED",
+            consultation__isnull=True
+        ).filter(
+            Q(appointment_date__lt=today) |
+            Q(
+                appointment_date=today,
+                appointment_time__lt=current_time
+            )
+        ).update(status="CANCELLED")
 
     def get(self, request):
         doctor = self.get_doctor(request)
+
+        # ✅ Auto-cancel expired appointments
+        self.cancel_expired_appointments(doctor)
+
         appointments = (
             Appointment.objects.filter(
                 doctor=doctor,
                 status="SCHEDULED",
-                consultation__isnull=True,  # only those not yet consulted
+                consultation__isnull=True
             )
             .select_related("patient", "doctor__clinic")
-            .order_by("-appointment_date", "-appointment_time")
+            .order_by("appointment_date", "appointment_time")
         )
 
         serializer = DoctorAppointmentSerializer(appointments, many=True)
@@ -446,3 +477,38 @@ class DoctorPrescriptionDetailAPIView(APIView):
         return Response(serializer.data)
 
 
+class DoctorPatientHistoryView(RetrieveAPIView):
+    serializer_class = PatientHistorySerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # 🔒 Doctor-only access
+        if not hasattr(user, "doctor_profile"):
+            return Patient.objects.none()
+
+        doctor = user.doctor_profile
+
+        return (
+            Patient.objects
+            .filter(
+                appointments__consultation__doctor=doctor
+            )
+            .distinct()
+            .prefetch_related(
+                "attachments",
+                Prefetch(
+                    "appointments",
+                    queryset=Appointment.objects.filter(
+                        consultation__doctor=doctor
+                    ).select_related(
+                        "doctor", "clinic"
+                    ).prefetch_related(
+                        "consultation__prescriptions"
+                    )
+                )
+            )
+            .select_related("clinic")
+        )

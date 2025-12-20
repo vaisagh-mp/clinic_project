@@ -125,28 +125,113 @@ class Patient(BaseModel):
         ('AB+', 'AB+'), ('AB-', 'AB-'),
     ]
 
+    # -------------------------
+    # Mandatory Fields
+    # -------------------------
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
-    
-    # Personal Information
-    first_name = models.CharField(max_length=100, default="")
-    last_name = models.CharField(max_length=100, default="")
-    phone_number = models.CharField(max_length=20, default="")
-    email = models.EmailField(default="")
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    phone_number = models.CharField(max_length=20)
+    address = models.TextField()
+
+    # -------------------------
+    # Optional Fields
+    # -------------------------
+    email = models.EmailField(blank=True, null=True)
     dob = models.DateField(blank=True, null=True)
-    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, default='O')
-    blood_group = models.CharField(max_length=3, choices=BLOOD_GROUP_CHOICES, default='O+')
-    address = models.TextField(default="")
+    gender = models.CharField(
+        max_length=1,
+        choices=GENDER_CHOICES,
+        blank=True,
+        null=True
+    )
+    blood_group = models.CharField(
+        max_length=3,
+        choices=BLOOD_GROUP_CHOICES,
+        blank=True,
+        null=True
+    )
     care_of = models.CharField(
         max_length=200,
         blank=True,
         null=True,
         help_text="Guardian / Reference person for the patient"
     )
-    attachment = models.FileField(upload_to='patient_files/', blank=True, null=True)
+
+    # -------------------------
+    # New Optional Fields
+    # -------------------------
+    guardian_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Father's / Wife's / Husband's Name"
+    )
+
+    occupation = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        help_text="Patient's Occupation"
+    )
+
+    daily_medication = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Current daily medications"
+    )
+
+    drug_allergy = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Drug allergy if any"
+    )
+
+    relative_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Name of Relative"
+    )
+
+    relationship_with_patient = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Relationship with patient"
+    )
+
+    file_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Patient File Number"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "file_number"],
+                name="unique_file_number_per_clinic"
+            )
+        ]
+
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
     
 
+class PatientAttachment(BaseModel):
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.CASCADE,
+        related_name='attachments'
+    )
+    file = models.FileField(upload_to='patient_files/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Attachment for {self.patient.first_name}"
+    
 
 class Appointment(BaseModel):
     STATUS_CHOICES = [

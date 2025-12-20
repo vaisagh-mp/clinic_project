@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     MaterialPurchaseBill, MaterialPurchaseItem,
     ClinicBill, ClinicBillItem,
-    LabBill, LabBillItem,
+    LabBill,
     PharmacyBill, PharmacyBillItem, ProcedurePayment,
     Medicine, Procedure, Clinic, Patient,
 )
@@ -155,98 +155,216 @@ class ClinicPanelBillSerializer(serializers.ModelSerializer):
 
 
 # -------------------- Lab Bill --------------------
-class LabBillItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LabBillItem
-        fields = ['id', 'test_or_service', 'cost']
-
-
 class LabBillSerializer(serializers.ModelSerializer):
-    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # show name
-    clinic = serializers.PrimaryKeyRelatedField(queryset=Clinic.objects.all())  # accept ID on write
-    items = LabBillItemSerializer(many=True)
+    clinic_name = serializers.CharField(
+        source="clinic.name",
+        read_only=True
+    )
 
     class Meta:
         model = LabBill
-        fields = ['id', 'bill_number', 'clinic', 'clinic_name', 'bill_date', 'status', 'total_amount',
-                  'lab_name', 'work_description', 'items']
-        read_only_fields = ['bill_number', 'total_amount']
+        fields = [
+            "id",
 
+            # Auto / system
+            "bill_number",
+            "clinic",
+            "clinic_name",
+            "status",
+
+            # Patient / reference
+            "file_number",
+            "patient",
+            "patient_name",
+            "doctor",
+
+            # Lab details
+            "lab_name",
+            "work_description",
+
+            # Amounts
+            "lab_cost",
+            "clinic_cost",
+            "total_amount",
+
+            # Invoice
+            "invoice_number",
+            "date",
+
+            # Audit
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "bill_number",
+            "clinic",
+            "clinic_name",
+            "patient_name",
+            "total_amount",
+            "created_at",
+        ]
+
+    # -----------------------------------
+    # CREATE
+    # -----------------------------------
     def create(self, validated_data):
-        items_data = validated_data.pop('items', [])
+        request = self.context.get("request")
+        user = request.user if request else None
 
-        # Create bill first (gets primary key)
-        bill = LabBill.objects.create(**validated_data)
+        # -------------------------
+        # Resolve clinic
+        # -------------------------
+        clinic = None
+        if user:
+            if getattr(user, "role", "").lower() == "superadmin":
+                clinic_id = request.query_params.get("clinic_id")
+                if clinic_id:
+                    clinic = Clinic.objects.filter(id=clinic_id).first()
+            elif hasattr(user, "clinic_profile"):
+                clinic = user.clinic_profile
+            elif hasattr(user, "doctor_profile"):
+                clinic = user.doctor_profile.clinic
 
-        # Create items linked to bill
-        for item_data in items_data:
-            LabBillItem.objects.create(bill=bill, **item_data)
+        if not clinic:
+            raise serializers.ValidationError(
+                {"clinic": "Clinic not found or unauthorized"}
+            )
 
-        # Update total_amount
-        bill.total_amount = sum(item.cost for item in bill.items.all())
-        bill.save()
-        return bill
+        validated_data["clinic"] = clinic
 
+        # -------------------------
+        # Auto-fill patient_name
+        # -------------------------
+        patient = validated_data.get("patient")
+        if patient:
+            validated_data["patient_name"] = (
+                f"{patient.first_name} {patient.last_name}".strip()
+            )
+
+            # Optional: auto-fill file_number from patient
+            if not validated_data.get("file_number"):
+                validated_data["file_number"] = patient.file_number
+
+        # -------------------------
+        # Total amount = clinic_cost
+        # -------------------------
+        validated_data["total_amount"] = validated_data.get("clinic_cost", 0)
+
+        return super().create(validated_data)
+
+    # -----------------------------------
+    # UPDATE
+    # -----------------------------------
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
+        # Prevent changing patient snapshot
+        validated_data.pop("patient_name", None)
+        validated_data.pop("clinic", None)
+        validated_data.pop("bill_number", None)
 
-        # Update main bill fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        # Recalculate total if clinic_cost changes
+        if "clinic_cost" in validated_data:
+            validated_data["total_amount"] = validated_data["clinic_cost"]
 
-        if items_data is not None:
-            instance.items.all().delete()
-            for item_data in items_data:
-                LabBillItem.objects.create(bill=instance, **item_data)
-
-            instance.total_amount = sum(item.cost for item in instance.items.all())
-            instance.save()
-
-        return instance
+        return super().update(instance, validated_data)
 
 class LabPanelBillSerializer(serializers.ModelSerializer):
-    clinic_name = serializers.CharField(source="clinic.name", read_only=True)  # Show clinic name
-    items = LabBillItemSerializer(many=True)  # Nested items
+    clinic_name = serializers.CharField(
+        source="clinic.name",
+        read_only=True
+    )
 
     class Meta:
         model = LabBill
-        fields = ['id', 'bill_number', 'clinic_name', 'bill_date', 'status', 'total_amount',
-                  'lab_name', 'work_description', 'items']
-        read_only_fields = ['bill_number', 'total_amount', 'clinic_name', 'clinic']
+        fields = [
+            "id",
+            "bill_number",
+            "clinic_name",
+            "status",
+
+            # Patient / reference
+            "file_number",
+            "patient",
+            "patient_name",
+            "doctor",
+
+            # Lab details
+            "lab_name",
+            "work_description",
+
+            # Amounts
+            "lab_cost",
+            "clinic_cost",
+            "total_amount",
+
+            # Invoice
+            "invoice_number",
+            "date",
+
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "bill_number",
+            "clinic_name",
+            "patient_name",
+            "total_amount",
+            "created_at",
+        ]
 
     def create(self, validated_data):
-        items_data = validated_data.pop('items', [])
-    
-        # ✅ Get clinic either from context or request.user
-        clinic = self.context.get('clinic') or self.context['request'].user.clinic_profile
-    
-        bill = LabBill.objects.create(clinic=clinic, **validated_data)
-    
-        for item_data in items_data:
-            LabBillItem.objects.create(bill=bill, **item_data)
-    
-        bill.total_amount = sum(item.cost for item in bill.items.all())
-        bill.save()
-        return bill
+        request = self.context.get("request")
+        user = request.user if request else None
+
+        # -------------------------
+        # Resolve clinic
+        # -------------------------
+        clinic = None
+        if getattr(user, "role", "").lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if clinic_id:
+                clinic = Clinic.objects.filter(id=clinic_id).first()
+        elif hasattr(user, "clinic_profile"):
+            clinic = user.clinic_profile
+        elif hasattr(user, "doctor_profile"):
+            clinic = user.doctor_profile.clinic
+
+        if not clinic:
+            raise serializers.ValidationError(
+                {"clinic": "Clinic not found or unauthorized"}
+            )
+
+        validated_data["clinic"] = clinic
+
+        # -------------------------
+        # Auto-fill patient_name
+        # -------------------------
+        patient = validated_data.get("patient")
+        if patient:
+            validated_data["patient_name"] = (
+                f"{patient.first_name} {patient.last_name}".strip()
+            )
+
+            if not validated_data.get("file_number"):
+                validated_data["file_number"] = patient.file_number
+
+        # -------------------------
+        # Total amount
+        # -------------------------
+        validated_data["total_amount"] = validated_data.get("clinic_cost", 0)
+
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
+        # Prevent immutable changes
+        validated_data.pop("clinic", None)
+        validated_data.pop("bill_number", None)
+        validated_data.pop("patient_name", None)
 
-        # Update main bill fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        if "clinic_cost" in validated_data:
+            validated_data["total_amount"] = validated_data["clinic_cost"]
 
-        if items_data is not None:
-            instance.items.all().delete()
-            for item_data in items_data:
-                LabBillItem.objects.create(bill=instance, **item_data)
+        return super().update(instance, validated_data)
 
-            instance.total_amount = sum(item.cost for item in instance.items.all())
-            instance.save()
-
-        return instance
 # -------------------- Pharmacy --------------------
 class MedicineSerializer(serializers.ModelSerializer):
     class Meta:

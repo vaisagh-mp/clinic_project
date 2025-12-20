@@ -1,8 +1,9 @@
 from rest_framework import serializers
 import json
+from django.db.models import Max
 from datetime import date
 from .models import Clinic
-from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification
+from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification, PatientAttachment
 from accounts.models import User
 from django.contrib.auth import get_user_model
 
@@ -189,20 +190,73 @@ class ClinicSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 # -------------------- Patient --------------------
+
+class PatientAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientAttachment
+        fields = ["id", "file", "uploaded_at"]
+
+
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
     clinic = serializers.SerializerMethodField(read_only=True)
-    attachment = serializers.FileField(required=False, allow_null=True)
+
+    # Read-only attachments
+    attachments = PatientAttachmentSerializer(
+        many=True,
+        read_only=True
+    )
+
+    # Write-only multiple file upload
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = Patient
         fields = [
-            "id", "first_name", "last_name", "email", "phone_number",
-            "dob", "age", "gender", "blood_group", "address",
-            "care_of", "clinic", "attachment"
-        ]
-        read_only_fields = ["age", "clinic"]
+            # Core
+            "id",
+            "first_name",
+            "last_name",
+            "phone_number",
+            "address",
 
+            # Optional personal
+            "email",
+            "dob",
+            "age",
+            "gender",
+            "blood_group",
+            "care_of",
+
+            # Newly added optional fields
+            "guardian_name",
+            "occupation",
+            "daily_medication",
+            "drug_allergy",
+            "relative_name",
+            "relationship_with_patient",
+            "file_number",
+
+            # System / relations
+            "clinic",
+            "attachments",  # response
+            "files",        # request
+        ]
+
+        read_only_fields = [
+            "id",
+            "age",
+            "clinic",
+            "attachments",
+        ]
+
+    # -------------------------
+    # Computed Fields
+    # -------------------------
     def get_age(self, obj):
         if not obj.dob:
             return None
@@ -212,43 +266,79 @@ class PatientSerializer(serializers.ModelSerializer):
         )
 
     def get_clinic(self, obj):
-        if obj.clinic:
-            return obj.clinic.id
-        return None
+        return obj.clinic.id if obj.clinic else None
 
+    # -------------------------
+    # Create with files
+    # -------------------------
     def create(self, validated_data):
         request = self.context.get("request")
+        files = validated_data.pop("files", [])
+
         user = request.user if request else None
         clinic = None
-    
+
         if user:
-            # ✅ Superadmin (check query param or POST data)
+            # Superadmin
             if getattr(user, "role", "").lower() == "superadmin":
                 clinic_id = (
                     request.query_params.get("clinic_id")
-                    or request.data.get("clinic")  # 👈 add this line
+                    or request.data.get("clinic")
                 )
                 if clinic_id:
                     clinic = Clinic.objects.filter(id=clinic_id).first()
-    
-            # ✅ Clinic admin / staff
+
+            # Clinic admin / staff
             elif hasattr(user, "clinic_profile"):
                 clinic = user.clinic_profile
-    
-            # ✅ Doctor
+
+            # Doctor
             elif hasattr(user, "doctor_profile"):
                 clinic = getattr(user.doctor_profile, "clinic", None)
-    
+
         if not clinic:
             raise serializers.ValidationError(
                 {"clinic": "Clinic not found or unauthorized"}
             )
-    
-        validated_data["clinic"] = clinic
-        return super().create(validated_data)
-    
 
-    
+        validated_data["clinic"] = clinic
+
+
+        # =====================================================
+        # FILE NUMBER AUTO-GENERATION LOGIC  (ADD HERE 👇)
+        # =====================================================
+        file_number = validated_data.get("file_number")
+
+        if not file_number:
+            last_file = (
+                Patient.objects
+                .filter(
+                    clinic=clinic,
+                    file_number__regex=r'^\d+$'
+                )
+                .aggregate(max_no=Max("file_number"))
+            )["max_no"]
+
+            if last_file:
+                next_file_number = int(last_file) + 1
+            else:
+                next_file_number = clinic.file_number_start
+
+            validated_data["file_number"] = str(next_file_number)
+        # =====================================================
+
+        # Create patient
+        patient = Patient.objects.create(**validated_data)
+
+        # Save multiple attachments
+        for file in files:
+            PatientAttachment.objects.create(
+                patient=patient,
+                file=file
+            )
+
+        return patient
+
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good

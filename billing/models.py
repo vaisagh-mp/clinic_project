@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from clinic_panel.models import Clinic, Patient
+from clinic_panel.models import Clinic, Patient, Doctor
 import datetime
 
 # -----------------------
@@ -114,11 +114,66 @@ class ClinicBillItem(models.Model):
 # 3. Lab Bill
 # -----------------------
 class LabBill(BaseBill):
+
+    # -------------------------
+    # Patient / Reference Info
+    # -------------------------
+    file_number = models.CharField(
+        max_length=50,
+        help_text="Patient file number"
+    )
+
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lab_bills"
+    )
+
+    patient_name = models.CharField(
+        max_length=200,
+        help_text="Patient name (snapshot)"
+    )
+
+    doctor = models.ForeignKey(
+        Doctor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lab_bills"
+    )
+
+    # -------------------------
+    # Lab Details
+    # -------------------------
     lab_name = models.CharField(max_length=200)
     work_description = models.TextField()
 
+    lab_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Cost charged by lab"
+    )
+
+    clinic_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Amount charged to patient by clinic"
+    )
+
+    # -------------------------
+    # Invoice Info
+    # -------------------------
+    invoice_number = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    date = models.DateField(default=timezone.now)
+
     def save(self, *args, **kwargs):
-        # Generate Bill Number if not exists
+        # Auto-generate bill number
         if not self.bill_number:
             last = LabBill.objects.order_by('id').last()
             if last and last.bill_number:
@@ -130,25 +185,13 @@ class LabBill(BaseBill):
                 number = 1
             self.bill_number = f"LB-{number:05d}"
 
-        # DO NOT calculate total here on creation
+        # Total = clinic_cost (since this is a single-line bill)
+        self.total_amount = self.clinic_cost
+
         super().save(*args, **kwargs)
-
-
-class LabBillItem(models.Model):
-    bill = models.ForeignKey(LabBill, on_delete=models.CASCADE, related_name="items")
-    test_or_service = models.CharField(max_length=200)
-    cost = models.DecimalField(max_digits=10, decimal_places=2)
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-
-        # Update bill total_amount automatically after saving item
-        bill = self.bill
-        bill.total_amount = sum(item.cost for item in bill.items.all())
-        bill.save()
 
     def __str__(self):
-        return f"{self.test_or_service} - {self.cost}"
+        return f"{self.bill_number} - {self.patient_name}"
 
 
 # -----------------------
