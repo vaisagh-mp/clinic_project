@@ -211,7 +211,8 @@ class PatientSerializer(serializers.ModelSerializer):
     files = serializers.ListField(
         child=serializers.FileField(),
         write_only=True,
-        required=False
+        required=False,
+        allow_empty=True
     )
 
     class Meta:
@@ -253,6 +254,32 @@ class PatientSerializer(serializers.ModelSerializer):
             "clinic",
             "attachments",
         ]
+
+    # -------------------------------------------------
+    # 🔧 ADD THIS METHOD EXACTLY HERE (CLASS LEVEL)
+    # -------------------------------------------------
+    def to_internal_value(self, data):
+        """
+        Fix multipart PATCH/PUT when files are removed.
+        Ignore empty/non-file values for `files`.
+        """
+        if hasattr(data, "copy"):
+            data = data.copy()
+
+        if hasattr(data, "getlist"):
+            files = data.getlist("files")
+
+            # keep only real uploaded files
+            valid_files = [f for f in files if hasattr(f, "read")]
+
+            if valid_files:
+                data.setlist("files", valid_files)
+            else:
+                data.pop("files", None)
+        else:
+            data.pop("files", None)
+
+        return super().to_internal_value(data)
 
     # -------------------------
     # Computed Fields
@@ -339,6 +366,31 @@ class PatientSerializer(serializers.ModelSerializer):
 
         return patient
 
+    # -------------------------
+    # Update with files
+    # -------------------------
+
+    def update(self, instance, validated_data):
+        """
+        Handle PUT / PATCH updates including file uploads
+        """
+        files = validated_data.pop("files", [])
+    
+        # Update normal fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+    
+        instance.save()
+    
+        # Save new attachments (append, do NOT remove old ones)
+        for file in files:
+            PatientAttachment.objects.create(
+                patient=instance,
+                file=file
+            )
+    
+        return instance
+    
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good
