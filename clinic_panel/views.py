@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 from clinic_project.permissions import RoleBasedPanelAccess
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Doctor, Patient, Appointment
+from .models import Doctor, Patient, Appointment, PatientAttachment
 from admin_panel.models import Clinic
 from doctor_panel.models import Prescription, Consultation    
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
@@ -671,6 +671,32 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
         return Response(
             {"detail": "Patient deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT
+        )
+    
+class PatientAttachmentDeleteAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        attachment = get_object_or_404(PatientAttachment, pk=pk)
+
+        # Optional: permission check
+        user = request.user
+        patient = attachment.patient
+
+        if hasattr(user, "clinic_profile"):
+            if patient.clinic != user.clinic_profile:
+                return Response(
+                    {"detail": "Not authorized"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # Delete file from storage + DB
+        attachment.file.delete(save=False)
+        attachment.delete()
+
+        return Response(
+            {"detail": "Attachment deleted successfully"},
             status=status.HTTP_204_NO_CONTENT
         )
 # -------------------- Appointment --------------------
