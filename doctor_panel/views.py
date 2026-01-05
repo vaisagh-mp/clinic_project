@@ -11,7 +11,7 @@ from django.db.models import Prefetch
 from clinic_panel.models import Appointment, Patient
 from clinic_panel.serializers import PatientHistorySerializer
 from .models import Consultation, Prescription, Doctor
-from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer
+from .serializers import ConsultationSerializer, PrescriptionSerializer, PrescriptionListSerializer, DoctorPatientHistorySerializer
 from .serializers import DoctorAppointmentSerializer
 from admin_panel.serializers import AppointmentSerializer
 from django.db import transaction
@@ -478,14 +478,13 @@ class DoctorPrescriptionDetailAPIView(APIView):
 
 
 class DoctorPatientHistoryView(RetrieveAPIView):
-    serializer_class = PatientHistorySerializer
+    serializer_class = DoctorPatientHistorySerializer
     permission_classes = [IsAuthenticated]
     lookup_field = "id"
 
     def get_queryset(self):
         user = self.request.user
 
-        # 🔒 Doctor-only access
         if not hasattr(user, "doctor_profile"):
             return Patient.objects.none()
 
@@ -493,22 +492,15 @@ class DoctorPatientHistoryView(RetrieveAPIView):
 
         return (
             Patient.objects
-            .filter(
-                appointments__consultation__doctor=doctor
-            )
+            .filter(appointments__consultation__doctor=doctor)
             .distinct()
             .prefetch_related(
                 "attachments",
-                Prefetch(
-                    "appointments",
-                    queryset=Appointment.objects.filter(
-                        consultation__doctor=doctor
-                    ).select_related(
-                        "doctor", "clinic"
-                    ).prefetch_related(
-                        "consultation__prescriptions"
-                    )
-                )
+                "appointments__consultation__prescriptions"
             )
-            .select_related("clinic")
         )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["doctor"] = self.request.user.doctor_profile
+        return context
