@@ -1,5 +1,6 @@
 from rest_framework import serializers
 import json
+from django.http import QueryDict
 from django.db.models import Max
 from datetime import date
 from .models import Clinic
@@ -260,24 +261,26 @@ class PatientSerializer(serializers.ModelSerializer):
     # -------------------------------------------------
     def to_internal_value(self, data):
         """
-        Fix multipart PATCH/PUT when files are removed.
-        Ignore empty/non-file values for `files`.
+        Safely handle multipart PATCH/PUT with files.
+        Avoid deepcopy of file objects.
         """
-        if hasattr(data, "copy"):
-            data = data.copy()
 
-        if hasattr(data, "getlist"):
+        # Only handle QueryDict (multipart/form-data)
+        if isinstance(data, QueryDict):
+            mutable_data = data.copy()  # QueryDict copy (safe)
+            mutable_data._mutable = True
+
             files = data.getlist("files")
 
-            # keep only real uploaded files
+            # Keep only valid uploaded files
             valid_files = [f for f in files if hasattr(f, "read")]
 
             if valid_files:
-                data.setlist("files", valid_files)
+                mutable_data.setlist("files", valid_files)
             else:
-                data.pop("files", None)
-        else:
-            data.pop("files", None)
+                mutable_data.pop("files", None)
+
+            data = mutable_data
 
         return super().to_internal_value(data)
 

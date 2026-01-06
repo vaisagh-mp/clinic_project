@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from datetime import date
-from .models import Appointment, Patient
+from .models import Appointment, Patient, Doctor, Clinic
 from doctor_panel.models import Prescription, Consultation
-from doctor_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer
+from doctor_panel.serializers import PatientSerializer, DoctorSerializer, ClinicSerializer, PatientAttachmentSerializer
 
 
 class ClinicPrescriptionListSerializer(serializers.ModelSerializer):
@@ -111,59 +111,161 @@ class PatientHistoryAppointmentSerializer(serializers.ModelSerializer):
         ]
 
 
-class PatientHistorySerializer(serializers.ModelSerializer):
-    appointments = PatientHistoryAppointmentSerializer(
-        many=True,
-        read_only=True
-    )
+# class PatientHistorySerializer(serializers.ModelSerializer):
+#     appointments = PatientHistoryAppointmentSerializer(
+#         many=True,
+#         read_only=True
+#     )
 
-    attachments = serializers.SerializerMethodField()
+#     attachments = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = Patient
+#         fields = [
+#             # -------------------------
+#             # Core Patient Info
+#             # -------------------------
+#             "id",
+#             "first_name",
+#             "last_name",
+#             "phone_number",
+#             "email",
+#             "dob",
+#             "gender",
+#             "blood_group",
+#             "address",
+#             "care_of",
+
+#             # -------------------------
+#             # New Optional Fields
+#             # -------------------------
+#             "guardian_name",
+#             "occupation",
+#             "daily_medication",
+#             "drug_allergy",
+#             "relative_name",
+#             "relationship_with_patient",
+#             "file_number",
+
+#             # -------------------------
+#             # Related Data
+#             # -------------------------
+#             "attachments",
+#             "appointments",
+#         ]
+
+#     def get_attachments(self, obj):
+#         """
+#         Return patient attachments (files)
+#         """
+#         return [
+#             {
+#                 "id": attachment.id,
+#                 "file": attachment.file.url if attachment.file else None,
+#                 "uploaded_at": attachment.uploaded_at,
+#             }
+#             for attachment in obj.attachments.all()
+#         ]
+
+
+class DoctorMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Doctor
+        fields = ["id", "name", "specialization"]
+
+class ClinicMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Clinic
+        fields = ["id", "name"]
+
+class AppointmentMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = [
+            "id",
+            "appointment_id",
+            "appointment_date",
+            "appointment_time",
+            "status",
+            "reason",
+        ]
+
+class PrescriptionMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prescription
+        fields = [
+            "id",
+            "medicine_name",
+            "dosage",
+            "frequency",
+            "timings",
+            "duration",
+        ]
+
+class ConsultationHistorySerializer(serializers.ModelSerializer):
+    doctor = DoctorMiniSerializer(read_only=True)
+    prescriptions = PrescriptionMiniSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Consultation
+        fields = [
+            "id",
+            "doctor",
+            "notes",
+            "complaints",
+            "diagnosis",
+            "investigations",
+            "advices",
+            "allergies",
+            "next_consultation",
+            "created_at",
+            "prescriptions",
+        ]
+
+class PatientConsultationHistorySerializer(serializers.ModelSerializer):
+    appointment = AppointmentMiniSerializer(source="*", read_only=True)
+    consultation = ConsultationHistorySerializer(read_only=True)
+
+    class Meta:
+        model = Appointment
+        fields = ["appointment", "consultation"]
+
+class PatientHistorySerializer(serializers.ModelSerializer):
+    clinic = ClinicMiniSerializer(read_only=True)
+    attachments = PatientAttachmentSerializer(many=True, read_only=True)
+    consultations = serializers.SerializerMethodField()
 
     class Meta:
         model = Patient
         fields = [
-            # -------------------------
-            # Core Patient Info
-            # -------------------------
+            # Patient core
             "id",
             "first_name",
             "last_name",
             "phone_number",
-            "email",
             "dob",
             "gender",
             "blood_group",
-            "address",
-            "care_of",
-
-            # -------------------------
-            # New Optional Fields
-            # -------------------------
-            "guardian_name",
-            "occupation",
+            "file_number",
             "daily_medication",
             "drug_allergy",
-            "relative_name",
-            "relationship_with_patient",
-            "file_number",
 
-            # -------------------------
-            # Related Data
-            # -------------------------
+            # Relations
+            "clinic",
             "attachments",
-            "appointments",
+            "consultations",
         ]
 
-    def get_attachments(self, obj):
-        """
-        Return patient attachments (files)
-        """
-        return [
-            {
-                "id": attachment.id,
-                "file": attachment.file.url if attachment.file else None,
-                "uploaded_at": attachment.uploaded_at,
-            }
-            for attachment in obj.attachments.all()
-        ]
+    def get_consultations(self, obj):
+        appointments = (
+            obj.appointments
+            .filter(consultation__isnull=False)
+            .select_related("consultation", "consultation__doctor")
+            .prefetch_related("consultation__prescriptions")
+            .order_by("-appointment_date", "-appointment_time")
+        )
 
+        return PatientConsultationHistorySerializer(
+            appointments,
+            many=True
+        ).data
