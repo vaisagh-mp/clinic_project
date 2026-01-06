@@ -352,8 +352,20 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
+        if request.content_type.startswith("application/json") and request.FILES:
+            return Response(
+                {"detail": "Use multipart/form-data for file uploads"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         patient = get_object_or_404(Patient, pk=pk)
-        serializer = PatientSerializer(patient, data=request.data, partial=True, context={"request": request})
+        serializer = PatientSerializer(
+            patient,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
