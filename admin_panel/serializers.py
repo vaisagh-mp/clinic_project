@@ -209,12 +209,12 @@ class PatientSerializer(serializers.ModelSerializer):
     )
 
     # Write-only multiple file upload
-    files = serializers.ListField(
-        child=serializers.FileField(),
-        write_only=True,
-        required=False,
-        allow_empty=True
-    )
+    # files = serializers.ListField(
+    #     child=serializers.FileField(),
+    #     write_only=True,
+    #     required=False,
+    #     allow_empty=True
+    # )
 
     class Meta:
         model = Patient
