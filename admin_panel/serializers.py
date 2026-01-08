@@ -198,23 +198,210 @@ class PatientAttachmentSerializer(serializers.ModelSerializer):
         fields = ["id", "file", "uploaded_at"]
 
 
+# class PatientSerializer(serializers.ModelSerializer):
+#     age = serializers.SerializerMethodField(read_only=True)
+#     clinic = serializers.SerializerMethodField(read_only=True)
+
+#     # Read-only attachments
+#     attachments = PatientAttachmentSerializer(
+#         many=True,
+#         read_only=True
+#     )
+
+#     # Write-only multiple file upload
+#     # files = serializers.ListField(
+#     #     child=serializers.FileField(),
+#     #     write_only=True,
+#     #     required=False,
+#     #     allow_empty=True
+#     # )
+
+#     class Meta:
+#         model = Patient
+#         fields = [
+#             # Core
+#             "id",
+#             "first_name",
+#             "last_name",
+#             "phone_number",
+#             "address",
+
+#             # Optional personal
+#             "email",
+#             "dob",
+#             "age",
+#             "gender",
+#             "blood_group",
+#             "care_of",
+
+#             # Newly added optional fields
+#             "guardian_name",
+#             "occupation",
+#             "daily_medication",
+#             "drug_allergy",
+#             "relative_name",
+#             "relationship_with_patient",
+#             "file_number",
+
+#             # System / relations
+#             "clinic",
+#             "attachments",  # response
+#             # "files",        # request
+#         ]
+
+#         read_only_fields = [
+#             "id",
+#             "age",
+#             "clinic",
+#             "attachments",
+#         ]
+
+#     # -------------------------------------------------
+#     # 🔧 ADD THIS METHOD EXACTLY HERE (CLASS LEVEL)
+#     # -------------------------------------------------
+#     # def to_internal_value(self, data):
+#     #     """
+#     #     Safely handle multipart PATCH/PUT with files.
+#     #     Avoid deepcopy of file objects.
+#     #     """
+
+#     #     # Only handle QueryDict (multipart/form-data)
+#     #     if isinstance(data, QueryDict):
+#     #         mutable_data = data.copy()  # QueryDict copy (safe)
+#     #         mutable_data._mutable = True
+
+#     #         files = data.getlist("files")
+
+#     #         # Keep only valid uploaded files
+#     #         valid_files = [f for f in files if hasattr(f, "read")]
+
+#     #         if valid_files:
+#     #             mutable_data.setlist("files", valid_files)
+#     #         else:
+#     #             mutable_data.pop("files", None)
+
+#     #         data = mutable_data
+
+#     #     return super().to_internal_value(data)
+
+#     # -------------------------
+#     # Computed Fields
+#     # -------------------------
+#     def get_age(self, obj):
+#         if not obj.dob:
+#             return None
+#         today = date.today()
+#         return today.year - obj.dob.year - (
+#             (today.month, today.day) < (obj.dob.month, obj.dob.day)
+#         )
+
+#     def get_clinic(self, obj):
+#         return obj.clinic.id if obj.clinic else None
+
+#     # -------------------------
+#     # Create with files
+#     # -------------------------
+#     def create(self, validated_data):
+#         request = self.context.get("request")
+#         files = validated_data.pop("files", [])
+
+#         user = request.user if request else None
+#         clinic = None
+
+#         if user:
+#             # Superadmin
+#             if getattr(user, "role", "").lower() == "superadmin":
+#                 clinic_id = (
+#                     request.query_params.get("clinic_id")
+#                     or request.data.get("clinic")
+#                 )
+#                 if clinic_id:
+#                     clinic = Clinic.objects.filter(id=clinic_id).first()
+
+#             # Clinic admin / staff
+#             elif hasattr(user, "clinic_profile"):
+#                 clinic = user.clinic_profile
+
+#             # Doctor
+#             elif hasattr(user, "doctor_profile"):
+#                 clinic = getattr(user.doctor_profile, "clinic", None)
+
+#         if not clinic:
+#             raise serializers.ValidationError(
+#                 {"clinic": "Clinic not found or unauthorized"}
+#             )
+
+#         validated_data["clinic"] = clinic
+
+
+#         # =====================================================
+#         # FILE NUMBER AUTO-GENERATION LOGIC  (ADD HERE 👇)
+#         # =====================================================
+#         file_number = validated_data.get("file_number")
+
+#         if not file_number:
+#             last_file = (
+#                 Patient.objects
+#                 .filter(
+#                     clinic=clinic,
+#                     file_number__regex=r'^\d+$'
+#                 )
+#                 .aggregate(max_no=Max("file_number"))
+#             )["max_no"]
+
+#             if last_file:
+#                 next_file_number = int(last_file) + 1
+#             else:
+#                 next_file_number = clinic.file_number_start
+
+#             validated_data["file_number"] = str(next_file_number)
+#         # =====================================================
+
+#         # Create patient
+#         patient = Patient.objects.create(**validated_data)
+
+#         # Save multiple attachments
+#         for file in files:
+#             PatientAttachment.objects.create(
+#                 patient=patient,
+#                 file=file
+#             )
+
+#         return patient
+
+#     # -------------------------
+#     # Update with files
+#     # -------------------------
+
+#     def update(self, instance, validated_data):
+#         """
+#         Handle PUT / PATCH updates including file uploads
+#         """
+#         files = validated_data.pop("files", [])
+    
+#         # Update normal fields
+#         for attr, value in validated_data.items():
+#             setattr(instance, attr, value)
+    
+#         instance.save()
+    
+#         # Save new attachments (append, do NOT remove old ones)
+#         for file in files:
+#             PatientAttachment.objects.create(
+#                 patient=instance,
+#                 file=file
+#             )
+    
+#         return instance
+
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
     clinic = serializers.SerializerMethodField(read_only=True)
 
-    # Read-only attachments
     attachments = PatientAttachmentSerializer(
         many=True,
         read_only=True
     )
-
-    # Write-only multiple file upload
-    # files = serializers.ListField(
-    #     child=serializers.FileField(),
-    #     write_only=True,
-    #     required=False,
-    #     allow_empty=True
-    # )
 
     class Meta:
         model = Patient
@@ -234,7 +421,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "blood_group",
             "care_of",
 
-            # Newly added optional fields
+            # Extra
             "guardian_name",
             "occupation",
             "daily_medication",
@@ -243,10 +430,9 @@ class PatientSerializer(serializers.ModelSerializer):
             "relationship_with_patient",
             "file_number",
 
-            # System / relations
+            # Relations
             "clinic",
-            "attachments",  # response
-            "files",        # request
+            "attachments",
         ]
 
         read_only_fields = [
@@ -256,37 +442,6 @@ class PatientSerializer(serializers.ModelSerializer):
             "attachments",
         ]
 
-    # -------------------------------------------------
-    # 🔧 ADD THIS METHOD EXACTLY HERE (CLASS LEVEL)
-    # -------------------------------------------------
-    def to_internal_value(self, data):
-        """
-        Safely handle multipart PATCH/PUT with files.
-        Avoid deepcopy of file objects.
-        """
-
-        # Only handle QueryDict (multipart/form-data)
-        if isinstance(data, QueryDict):
-            mutable_data = data.copy()  # QueryDict copy (safe)
-            mutable_data._mutable = True
-
-            files = data.getlist("files")
-
-            # Keep only valid uploaded files
-            valid_files = [f for f in files if hasattr(f, "read")]
-
-            if valid_files:
-                mutable_data.setlist("files", valid_files)
-            else:
-                mutable_data.pop("files", None)
-
-            data = mutable_data
-
-        return super().to_internal_value(data)
-
-    # -------------------------
-    # Computed Fields
-    # -------------------------
     def get_age(self, obj):
         if not obj.dob:
             return None
@@ -296,104 +451,7 @@ class PatientSerializer(serializers.ModelSerializer):
         )
 
     def get_clinic(self, obj):
-        return obj.clinic.id if obj.clinic else None
-
-    # -------------------------
-    # Create with files
-    # -------------------------
-    def create(self, validated_data):
-        request = self.context.get("request")
-        files = validated_data.pop("files", [])
-
-        user = request.user if request else None
-        clinic = None
-
-        if user:
-            # Superadmin
-            if getattr(user, "role", "").lower() == "superadmin":
-                clinic_id = (
-                    request.query_params.get("clinic_id")
-                    or request.data.get("clinic")
-                )
-                if clinic_id:
-                    clinic = Clinic.objects.filter(id=clinic_id).first()
-
-            # Clinic admin / staff
-            elif hasattr(user, "clinic_profile"):
-                clinic = user.clinic_profile
-
-            # Doctor
-            elif hasattr(user, "doctor_profile"):
-                clinic = getattr(user.doctor_profile, "clinic", None)
-
-        if not clinic:
-            raise serializers.ValidationError(
-                {"clinic": "Clinic not found or unauthorized"}
-            )
-
-        validated_data["clinic"] = clinic
-
-
-        # =====================================================
-        # FILE NUMBER AUTO-GENERATION LOGIC  (ADD HERE 👇)
-        # =====================================================
-        file_number = validated_data.get("file_number")
-
-        if not file_number:
-            last_file = (
-                Patient.objects
-                .filter(
-                    clinic=clinic,
-                    file_number__regex=r'^\d+$'
-                )
-                .aggregate(max_no=Max("file_number"))
-            )["max_no"]
-
-            if last_file:
-                next_file_number = int(last_file) + 1
-            else:
-                next_file_number = clinic.file_number_start
-
-            validated_data["file_number"] = str(next_file_number)
-        # =====================================================
-
-        # Create patient
-        patient = Patient.objects.create(**validated_data)
-
-        # Save multiple attachments
-        for file in files:
-            PatientAttachment.objects.create(
-                patient=patient,
-                file=file
-            )
-
-        return patient
-
-    # -------------------------
-    # Update with files
-    # -------------------------
-
-    def update(self, instance, validated_data):
-        """
-        Handle PUT / PATCH updates including file uploads
-        """
-        files = validated_data.pop("files", [])
-    
-        # Update normal fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-    
-        instance.save()
-    
-        # Save new attachments (append, do NOT remove old ones)
-        for file in files:
-            PatientAttachment.objects.create(
-                patient=instance,
-                file=file
-            )
-    
-        return instance
-    
+        return obj.clinic.id if obj.clinic else None   
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good
