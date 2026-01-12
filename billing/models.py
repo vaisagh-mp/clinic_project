@@ -186,7 +186,7 @@ class LabBill(BaseBill):
             self.bill_number = f"LB-{number:05d}"
 
         # Total = clinic_cost (since this is a single-line bill)
-        self.total_amount = self.clinic_cost
+        self.total_amount = self.clinic_cost + self.lab_cost
 
         super().save(*args, **kwargs)
 
