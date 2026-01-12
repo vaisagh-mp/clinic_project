@@ -176,11 +176,12 @@ class LabBillListCreateAPIView(APIView):
     def get_clinic(self, request):
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        # SUPERADMIN / ADMIN → no clinic restriction
+        if getattr(user, "role", "").upper() in ["SUPERADMIN", "ADMIN"]:
             clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
-                return None
-            return get_object_or_404(Clinic, id=clinic_id)
+            if clinic_id:
+                return get_object_or_404(Clinic, id=clinic_id)
+            return None  # ← means ALL clinics
 
         if hasattr(user, "clinic_profile"):
             return user.clinic_profile
@@ -192,18 +193,14 @@ class LabBillListCreateAPIView(APIView):
 
     def get(self, request):
         clinic = self.get_clinic(request)
-        if not clinic:
-            return Response(
-                {"detail": "Clinic not found or unauthorized"},
-                status=status.HTTP_403_FORBIDDEN
-            )
 
-        bills = (
-            LabBill.objects
-            .filter(clinic=clinic)
-            .order_by("-created_at")
-        )
+        if clinic:
+            bills = LabBill.objects.filter(clinic=clinic)
+        else:
+            # SUPERADMIN / ADMIN → all clinics
+            bills = LabBill.objects.all()
 
+        bills = bills.order_by("-created_at")
         serializer = LabBillSerializer(bills, many=True)
         return Response(serializer.data)
 
@@ -248,32 +245,19 @@ class LabBillRetrieveUpdateDeleteAPIView(APIView):
         return None
 
     def get_object(self, pk, clinic):
-        return get_object_or_404(
-            LabBill,
-            pk=pk,
-            clinic=clinic
-        )
+        if clinic:
+            return get_object_or_404(LabBill, pk=pk, clinic=clinic)
+        return get_object_or_404(LabBill, pk=pk)
+
 
     def get(self, request, pk):
         clinic = self.get_clinic(request)
-        if not clinic:
-            return Response(
-                {"detail": "Clinic not found or unauthorized"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         bill = self.get_object(pk, clinic)
         serializer = LabBillSerializer(bill)
         return Response(serializer.data)
 
     def put(self, request, pk):
         clinic = self.get_clinic(request)
-        if not clinic:
-            return Response(
-                {"detail": "Clinic not found or unauthorized"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         bill = self.get_object(pk, clinic)
 
         serializer = LabBillSerializer(
@@ -295,12 +279,6 @@ class LabBillRetrieveUpdateDeleteAPIView(APIView):
 
     def patch(self, request, pk):
         clinic = self.get_clinic(request)
-        if not clinic:
-            return Response(
-                {"detail": "Clinic not found or unauthorized"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         bill = self.get_object(pk, clinic)
 
         serializer = LabBillSerializer(
@@ -323,12 +301,6 @@ class LabBillRetrieveUpdateDeleteAPIView(APIView):
 
     def delete(self, request, pk):
         clinic = self.get_clinic(request)
-        if not clinic:
-            return Response(
-                {"detail": "Clinic not found or unauthorized"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         bill = self.get_object(pk, clinic)
         bill.delete()
 
