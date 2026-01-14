@@ -7,6 +7,7 @@ from .models import Clinic
 from clinic_panel.models import Doctor, Patient, Appointment, Education, Certification, PatientAttachment
 from accounts.models import User
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 
 User = get_user_model()
 
@@ -406,22 +407,17 @@ class PatientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            # Core
             "id",
             "first_name",
             "last_name",
             "phone_number",
             "address",
-
-            # Optional personal
             "email",
             "dob",
             "age",
             "gender",
             "blood_group",
             "care_of",
-
-            # Extra
             "guardian_name",
             "occupation",
             "daily_medication",
@@ -429,8 +425,6 @@ class PatientSerializer(serializers.ModelSerializer):
             "relative_name",
             "relationship_with_patient",
             "file_number",
-
-            # Relations
             "clinic",
             "attachments",
         ]
@@ -442,6 +436,40 @@ class PatientSerializer(serializers.ModelSerializer):
             "attachments",
         ]
 
+    # -------------------------
+    # CREATE (FIX)
+    # -------------------------
+    def create(self, validated_data):
+        request = self.context.get("request")
+        user = request.user if request else None
+
+        clinic = None
+
+        # SUPERADMIN → clinic_id required
+        if getattr(user, "role", "").lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                raise serializers.ValidationError(
+                    {"clinic": "clinic_id is required for superadmin"}
+                )
+            clinic = get_object_or_404(Clinic, id=clinic_id)
+
+        # CLINIC USER
+        elif hasattr(user, "clinic_profile"):
+            clinic = user.clinic_profile
+
+        # DOCTOR
+        elif hasattr(user, "doctor_profile"):
+            clinic = user.doctor_profile.clinic
+
+        if not clinic:
+            raise serializers.ValidationError(
+                {"clinic": "Clinic not found or unauthorized"}
+            )
+
+        validated_data["clinic"] = clinic
+        return super().create(validated_data)
+
     def get_age(self, obj):
         if not obj.dob:
             return None
@@ -451,7 +479,7 @@ class PatientSerializer(serializers.ModelSerializer):
         )
 
     def get_clinic(self, obj):
-        return obj.clinic.id if obj.clinic else None   
+        return obj.clinic.id if obj.clinic else None  
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good
