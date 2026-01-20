@@ -397,7 +397,13 @@ class PatientAttachmentSerializer(serializers.ModelSerializer):
 
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
-    clinic = serializers.SerializerMethodField(read_only=True)
+    clinic = serializers.PrimaryKeyRelatedField(
+        queryset=Clinic.objects.all(),
+        write_only=True,
+        required=False
+    )
+
+    clinic_id = serializers.SerializerMethodField(read_only=True)
 
     attachments = PatientAttachmentSerializer(
         many=True,
@@ -442,33 +448,34 @@ class PatientSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")
         user = request.user if request else None
-
+    
         clinic = None
-
-        # SUPERADMIN → clinic_id required
+    
+        # ✅ SUPERADMIN → accept clinic from request body
         if getattr(user, "role", "").lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
+            clinic = validated_data.pop("clinic", None)
+    
+            if not clinic:
                 raise serializers.ValidationError(
-                    {"clinic": "clinic_id is required for superadmin"}
+                    {"clinic": "Clinic is required"}
                 )
-            clinic = get_object_or_404(Clinic, id=clinic_id)
-
-        # CLINIC USER
+    
+        # ✅ CLINIC USER
         elif hasattr(user, "clinic_profile"):
             clinic = user.clinic_profile
-
-        # DOCTOR
+    
+        # ✅ DOCTOR
         elif hasattr(user, "doctor_profile"):
             clinic = user.doctor_profile.clinic
-
+    
         if not clinic:
             raise serializers.ValidationError(
                 {"clinic": "Clinic not found or unauthorized"}
             )
-
+    
         validated_data["clinic"] = clinic
         return super().create(validated_data)
+
 
     def get_age(self, obj):
         if not obj.dob:
@@ -479,7 +486,7 @@ class PatientSerializer(serializers.ModelSerializer):
         )
 
     def get_clinic(self, obj):
-        return obj.clinic.id if obj.clinic else None  
+        return obj.clinic.id if obj.clinic else None
 # -------------------- Appointment --------------------
 class AppointmentSerializer(serializers.ModelSerializer):
     clinic = ClinicSerializer(read_only=True)  # already good
