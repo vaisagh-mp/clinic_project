@@ -1070,25 +1070,26 @@ class ClinicProcedurePaymentListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        clinic = get_user_clinic(self.request)  # ✅ FIXED (was user before)
+        clinic = get_user_clinic(self.request)
 
-        # ✅ Superadmin can view all or specific clinic data
+        queryset = ProcedurePayment.objects.select_related(
+            "bill_item__bill", "bill_item__procedure"
+        )
+
+        bill_item_id = self.request.query_params.get("bill_item")
+        if bill_item_id:
+            queryset = queryset.filter(bill_item_id=bill_item_id)
+
         if clinic == "ALL":
             clinic_id = self.request.query_params.get("clinic_id")
             if clinic_id:
-                return ProcedurePayment.objects.filter(
-                    bill_item__bill__clinic_id=clinic_id
-                ).select_related("bill_item__bill", "bill_item__procedure")
-            return ProcedurePayment.objects.all().select_related("bill_item__bill", "bill_item__procedure")
+                return queryset.filter(bill_item__bill__clinic_id=clinic_id)
+            return queryset
 
-        # ✅ Clinic user can only see their clinic data
         elif clinic:
-            return ProcedurePayment.objects.filter(
-                bill_item__bill__clinic_id=clinic.id
-            ).select_related("bill_item__bill", "bill_item__procedure")
+            return queryset.filter(bill_item__bill__clinic_id=clinic.id)
 
-        else:
-            raise PermissionDenied("This user has no clinic assigned.")
+        raise PermissionDenied("This user has no clinic assigned.")
 
     def perform_create(self, serializer):
         clinic = get_user_clinic(self.request)  # ✅ FIXED

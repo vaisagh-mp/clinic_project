@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings 
 from django.utils.crypto import get_random_string
+from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from accounts.models import User
 from admin_panel.models import Clinic
@@ -207,6 +209,28 @@ class Patient(BaseModel):
         null=True,
         help_text="Patient File Number"
     )
+
+    def save(self, *args, **kwargs):
+        # ✔ Use provided file_number if present
+        if not self.file_number and self.clinic_id:
+            with transaction.atomic():
+                last_file = (
+                    Patient.objects
+                    .filter(clinic=self.clinic)
+                    .exclude(file_number__isnull=True)
+                    .aggregate(max_file=Max("file_number"))
+                    .get("max_file")
+                )
+
+                if last_file:
+                    last_number = int(last_file.split("-")[-1])
+                    next_number = last_number + 1
+                else:
+                    next_number = 1
+
+                self.file_number = f"CL{self.clinic.id}-P-{next_number:05d}"
+
+        super().save(*args, **kwargs)
 
     class Meta:
         constraints = [

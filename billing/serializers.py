@@ -7,6 +7,7 @@ from .models import (
     Medicine, Procedure, Clinic, Patient,
 )
 from doctor_panel.models import Consultation 
+from django.db.models import Sum
 
 # -------------------- Material Purchase --------------------
 class MaterialPurchaseItemSerializer(serializers.ModelSerializer):
@@ -391,13 +392,15 @@ class ProcedureSerializer(serializers.ModelSerializer):
 class ProcedurePaymentSerializer(serializers.ModelSerializer):
     bill_number = serializers.CharField(source="bill_item.bill.bill_number", read_only=True)
     procedure_name = serializers.CharField(source="bill_item.procedure.name", read_only=True)
-    balance_due = serializers.SerializerMethodField()  # ✅ new field
+    balance_due = serializers.SerializerMethodField()
+    payment_date = serializers.DateField(read_only=True)
 
     class Meta:
         model = ProcedurePayment
         fields = [
             "id",
             "amount_paid",
+            "payment_date",
             "notes",
             "bill_item",       # include it for creation
             "bill_number",
@@ -416,13 +419,23 @@ class ProcedurePaymentSerializer(serializers.ModelSerializer):
 
     def get_balance_due(self, obj):
         """
-        Calculate the balance due dynamically for this procedure item.
+        Balance due after THIS installment.
         """
-        if obj.bill_item:
-            subtotal = getattr(obj.bill_item, "subtotal", 0)
-            total_paid = getattr(obj.bill_item, "total_paid", 0)
-            return float(subtotal) - float(total_paid)
-        return None
+        if not obj.bill_item:
+            return None
+
+        subtotal = obj.bill_item.subtotal or 0
+
+        paid_till_now = (
+            ProcedurePayment.objects
+            .filter(
+                bill_item=obj.bill_item,
+                id__lte=obj.id
+            )
+            .aggregate(total=Sum("amount_paid"))["total"] or 0
+        )
+
+        return float(subtotal - paid_till_now)
 
     
 
