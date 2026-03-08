@@ -8,6 +8,7 @@ from clinic_panel.models import Doctor, Patient, Appointment, Education, Certifi
 from accounts.models import User
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from clinic_project.twilio_utils import send_patient_whatsapp
 
 User = get_user_model()
 
@@ -370,6 +371,14 @@ class PatientSerializer(serializers.ModelSerializer):
                 file=file
             )
 
+        # Send WhatsApp notification
+        welcome_msg = (
+            f"Hello {patient.first_name}, welcome to {patient.clinic.name}. "
+            f"Your patient file has been created successfully. "
+            f"File Number: {patient.file_number}"
+        )
+        send_patient_whatsapp(patient.phone_number, welcome_msg)
+
         return patient
 
     # -------------------------
@@ -395,6 +404,13 @@ class PatientSerializer(serializers.ModelSerializer):
                 file=file
             )
     
+        # Send WhatsApp notification for new attachments
+        if files:
+            update_msg = (
+                f"Hello {instance.first_name}, a new document has been added to your record at {instance.clinic.name}."
+            )
+            send_patient_whatsapp(instance.phone_number, update_msg)
+
         return instance
 
     def get_age(self, obj):
