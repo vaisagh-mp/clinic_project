@@ -217,6 +217,9 @@ class PatientSerializer(serializers.ModelSerializer):
         allow_empty=True
     )
 
+    # Response field for frontend
+    files_processed = serializers.IntegerField(read_only=True, required=False)
+
     class Meta:
         model = Patient
         fields = [
@@ -248,6 +251,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "clinic",
             "attachments",  # response
             "files",        # request
+            "files_processed",
         ]
 
         read_only_fields = [
@@ -255,6 +259,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "age",
             "clinic",
             "attachments",
+            "files_processed",
         ]
 
     def to_internal_value(self, data):
@@ -356,6 +361,7 @@ class PatientSerializer(serializers.ModelSerializer):
 
         # Create patient
         patient = Patient.objects.create(**validated_data)
+        patient.files_processed = len(files)
 
         # Save multiple attachments
         for file in files:
@@ -380,6 +386,7 @@ class PatientSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
     
         instance.save()
+        instance.files_processed = len(files)
     
         # Save new attachments (append, do NOT remove old ones)
         for file in files:
