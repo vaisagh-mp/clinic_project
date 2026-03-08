@@ -31,28 +31,29 @@ class DoctorDashboardAPIView(APIView):
         doctor = None
 
         # --- Case 1: Superadmin (switching between doctors) ---
-        if user.role == "SUPERADMIN":
+        if getattr(user, "role", "").upper() == "SUPERADMIN":
             if doctor_id:
                 # If doctor_id is passed in URL, load that doctor's dashboard
                 try:
                     target_user = User.objects.get(id=doctor_id, role="DOCTOR")
-                    doctor = target_user.doctor_profile
+                    doctor = getattr(target_user, "doctor_profile", None)
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
                 # Use centralized helper for acting user
                 target_user = get_acting_user_context(request)
-                if target_user and target_user.role == "DOCTOR":
+                if target_user and getattr(target_user, "role", "").upper() == "DOCTOR":
                     doctor = getattr(target_user, "doctor_profile", None)
 
             # fallback if no doctor found
             if not doctor:
-                doctor = Doctor.objects.first()
-                if not doctor:
+                doctor_profile = Doctor.objects.first()
+                if not doctor_profile:
                     return Response({"error": "No doctor found to access."}, status=404)
+                doctor = doctor_profile
 
         # --- Case 2: Normal doctor user ---
-        elif user.role == "DOCTOR":
+        elif getattr(user, "role", "").upper() == "DOCTOR":
             try:
                 doctor = user.doctor_profile
             except Doctor.DoesNotExist:
@@ -117,7 +118,7 @@ class ConsultationListCreateAPIView(APIView):
         user = request.user
         
         # Superadmin acting as someone
-        if user.role.upper() == "SUPERADMIN":
+        if getattr(user, "role", "").upper() == "SUPERADMIN":
             doctor_id = request.query_params.get("doctor_id") or request.data.get("doctor_id")
             if doctor_id:
                 return get_object_or_404(Doctor, id=doctor_id)
