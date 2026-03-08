@@ -16,6 +16,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from clinic_project.permissions import RoleBasedPanelAccess
+from clinic_project.utils import get_clinic_context
 
 
 User = get_user_model()
@@ -128,8 +129,7 @@ def switch_panel(request):
     refresh = RefreshToken.for_user(user)
     access_token = refresh.access_token
 
-    access_token["acting_as_role"] = target_user.role.lower()
-    access_token["acting_as_user_id"] = target_user.id
+    access_token["target_id"] = target_user.id
 
     # ✅ Build a readable target name
     full_name = f"{target_user.first_name} {target_user.last_name}".strip()
@@ -427,21 +427,19 @@ class AppointmentListCreateAPIView(APIView):
 
     def post(self, request):
         data = request.data.copy()
+        clinic = get_clinic_context(request)
 
-        # Admin must provide clinic_id
-        clinic_id = data.get("clinic_id")
-        if not clinic_id:
+        if not clinic:
             return Response(
-                {"detail": "clinic_id is required to create an appointment."},
+                {"detail": "clinic_id is required to create an appointment. Or switch to a clinic panel."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        clinic = get_object_or_404(Clinic, id=clinic_id)
         serializer = AppointmentSerializer(data=data)
         if serializer.is_valid():
             serializer.save(
                 created_by=request.user,
-                clinic=clinic  # assign clinic based on clinic_id
+                clinic=clinic  # assign clinic based on context
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 

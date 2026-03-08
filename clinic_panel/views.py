@@ -13,6 +13,7 @@ from doctor_panel.models import Prescription, Consultation
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer, PatientHistorySerializer
+from clinic_project.utils import get_clinic_context
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework.permissions import IsAuthenticated
@@ -24,48 +25,11 @@ class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, clinic_id=None):
+        clinic = get_clinic_context(request)
+        if not clinic:
+            return Response({"error": "Clinic not found or unauthorized"}, status=403)
+
         user = request.user
-        clinic = None
-
-        # --- Case 1: Superadmin (switching between clinics) ---
-        if user.role == "SUPERADMIN":
-            if clinic_id:
-                try:
-                    target_user = User.objects.get(id=clinic_id, role="CLINIC")
-                    clinic = target_user.clinic_profile
-                except (User.DoesNotExist, Clinic.DoesNotExist):
-                    return Response({"error": "Clinic not found."}, status=404)
-            else:
-                # fallback: use token acting_as info
-                auth_header = request.headers.get("Authorization", "")
-                token = auth_header.split(" ")[1] if " " in auth_header else None
-                if token:
-                    try:
-                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                        acting_as_id = payload.get("target_id")
-                        if acting_as_id:
-                            acting_user = User.objects.get(id=acting_as_id)
-                            clinic = acting_user.clinic_profile
-                    except Exception:
-                        pass
-
-            if not clinic:
-                clinic = Clinic.objects.first()
-                if not clinic:
-                    return Response({"error": "No clinic available to access."}, status=404)
-
-        # --- Case 2: Normal clinic user ---
-        elif user.role == "CLINIC":
-            try:
-                clinic = user.clinic_profile
-                if clinic_id and clinic.user.id != clinic_id:
-                    return Response({"error": "Unauthorized access."}, status=403)
-            except Clinic.DoesNotExist:
-                return Response({"error": "Clinic profile not found."}, status=404)
-
-        # --- Case 3: Others ---
-        else:
-            return Response({"error": "Only clinic users or superadmin can access this endpoint."}, status=403)
 
         # --- Fetch related data ---
         doctors = Doctor.objects.filter(clinic=clinic)
@@ -169,7 +133,7 @@ class DoctorListCreateAPIView(APIView):
         return getattr(user, "clinic_profile", None)
 
     def get(self, request):
-        clinic = self.get_clinic(request)
+        clinic = get_clinic_context(request)
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 
@@ -178,7 +142,7 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = self.get_clinic(request)
+        clinic = get_clinic_context(request)
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 

@@ -18,6 +18,7 @@ from django.db import transaction
 from clinic_project.permissions import RoleBasedPanelAccess
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from clinic_project.utils import get_clinic_context
 
 User = get_user_model()
 
@@ -119,15 +120,32 @@ class ConsultationListCreateAPIView(APIView):
     def get_doctor(self, request):
         """
         Determine which doctor to use:
-        - If Superadmin, use ?doctor_id=<id>
+        - If Superadmin, use ?doctor_id=<id> or acting_as context
         - If Doctor, use their profile
         """
         user = request.user
-        if user.role.lower() == "superadmin":
-            doctor_id = request.query_params.get("doctor_id")
-            if not doctor_id:
-                raise PermissionDenied("doctor_id is required for superadmin.")
-            return get_object_or_404(Doctor, id=doctor_id)
+        
+        # Superadmin acting as someone
+        if user.role.upper() == "SUPERADMIN":
+            doctor_id = request.query_params.get("doctor_id") or request.data.get("doctor_id")
+            if doctor_id:
+                return get_object_or_404(Doctor, id=doctor_id)
+            
+            # fallback to acting_as token
+            auth_header = request.headers.get("Authorization", "")
+            token = auth_header.split(" ")[1] if " " in auth_header else None
+            if token:
+                try:
+                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                    target_id = payload.get("target_id")
+                    if target_id:
+                        target_user = User.objects.get(id=target_id)
+                        if hasattr(target_user, "doctor_profile"):
+                            return target_user.doctor_profile
+                except Exception:
+                    pass
+            raise PermissionDenied("doctor_id is required for superadmin or switch to a doctor panel.")
+
         elif hasattr(user, "doctor_profile"):
             return user.doctor_profile
         raise PermissionDenied("Only doctors or superadmins can access consultations.")

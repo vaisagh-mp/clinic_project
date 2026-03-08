@@ -395,6 +395,8 @@ class PatientAttachmentSerializer(serializers.ModelSerializer):
     
 #         return instance
 
+from clinic_project.utils import get_clinic_context
+
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField(read_only=True)
     clinic = serializers.SerializerMethodField(read_only=True)
@@ -437,30 +439,11 @@ class PatientSerializer(serializers.ModelSerializer):
         ]
 
     # -------------------------
-    # CREATE (FIX)
+    # CREATE (FIXED WITH UTILS)
     # -------------------------
     def create(self, validated_data):
         request = self.context.get("request")
-        user = request.user if request else None
-
-        clinic = None
-
-        # SUPERADMIN → clinic_id required
-        if getattr(user, "role", "").lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
-                raise serializers.ValidationError(
-                    {"clinic": "clinic_id is required for superadmin"}
-                )
-            clinic = get_object_or_404(Clinic, id=clinic_id)
-
-        # CLINIC USER
-        elif hasattr(user, "clinic_profile"):
-            clinic = user.clinic_profile
-
-        # DOCTOR
-        elif hasattr(user, "doctor_profile"):
-            clinic = user.doctor_profile.clinic
+        clinic = get_clinic_context(request)
 
         if not clinic:
             raise serializers.ValidationError(

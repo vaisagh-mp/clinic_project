@@ -11,6 +11,7 @@ from .models import (
 from .serializers import (
     MaterialPurchaseBillSerializer, ClinicBillSerializer, LabBillSerializer, PharmacyBillSerializer, MedicineSerializer, ProcedureSerializer, ProcedurePaymentSerializer, ClinicPanelBillSerializer, LabPanelBillSerializer, ClinicPharmacyBillSerializer
 )
+from clinic_project.utils import get_clinic_context
 
 # -------------------- Generic CRUD View Template --------------------
 class BaseBillListCreateAPIView(APIView):
@@ -174,22 +175,7 @@ class LabBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        user = request.user
-
-        # SUPERADMIN / ADMIN → no clinic restriction
-        if getattr(user, "role", "").upper() in ["SUPERADMIN", "ADMIN"]:
-            clinic_id = request.query_params.get("clinic_id")
-            if clinic_id:
-                return get_object_or_404(Clinic, id=clinic_id)
-            return None  # ← means ALL clinics
-
-        if hasattr(user, "clinic_profile"):
-            return user.clinic_profile
-
-        if hasattr(user, "doctor_profile"):
-            return user.doctor_profile.clinic
-
-        return None
+        return get_clinic_context(request)
 
     def get(self, request):
         clinic = self.get_clinic(request)
@@ -365,14 +351,7 @@ class ClinicMaterialPurchaseBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """ Determine clinic for this request (superadmin or clinic user)."""
-        user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
-                return None
-            return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+        return get_clinic_context(request)
 
     def get(self, request):
         clinic = self.get_clinic(request)
@@ -465,14 +444,7 @@ class ClinicClinicBillListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """ Determine the clinic for this request (superadmin or clinic user)."""
-        user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
-                return None
-            return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+        return get_clinic_context(request)
 
     def get(self, request):
         clinic = self.get_clinic(request)
@@ -765,13 +737,7 @@ class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if clinic_id:
-                return get_object_or_404(Clinic, id=clinic_id)
-            return None
-        return user.clinic_profile
+        return get_clinic_context(request)
 
     def get_object(self, pk, clinic):
         return get_object_or_404(PharmacyBill, pk=pk, clinic=clinic)
@@ -825,25 +791,7 @@ class ClinicPharmacyBillRetrieveUpdateDeleteAPIView(APIView):
 
 # ----------------- Medicine CRUD -----------------    
 def get_user_clinic(request):
-
-    user = request.user
-
-    # 🔹 Superadmin - check for clinic_id in query params
-    if getattr(user, "role", "").lower() == "superadmin":
-        clinic_id = request.query_params.get("clinic_id")
-        if clinic_id:
-            return get_object_or_404(Clinic, id=clinic_id)
-        return None  # Must specify clinic_id
-
-    # 🔹 Clinic user
-    if hasattr(user, "clinic_profile") and user.clinic_profile:
-        return user.clinic_profile
-
-    # 🔹 Doctor user
-    if hasattr(user, "doctor_profile") and user.doctor_profile and user.doctor_profile.clinic:
-        return user.doctor_profile.clinic
-
-    return None
+    return get_clinic_context(request)
 
 
 # ----------------- Medicine List & Create -----------------
