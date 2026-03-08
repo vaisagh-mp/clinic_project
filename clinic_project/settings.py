@@ -13,36 +13,17 @@ import os
 import boto3
 from pathlib import Path
 from dotenv import load_dotenv
-from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env file
 load_dotenv()
 
-def get_config_value(name, default=None):
-    """
-    Robustly fetch a configuration value.
-    1. Try AWS SSM Parameter Store (if available)
-    2. Fallback to environment variables (.env)
-    3. Fallback to hardcoded default
-    """
-    # 1. Try AWS SSM
-    try:
-        ssm = boto3.client('ssm', region_name='ap-south-1')
-        return ssm.get_parameter(
-            Name=f'/clinic/{name}',
-            WithDecryption=True
-        )['Parameter']['Value']
-    except Exception:
-        # 2. Fallback to Environment Variables (.env)
-        return os.getenv(name, default)
-
 # Twilio WhatsApp Configuration
-TWILIO_ACCOUNT_SID = get_config_value('TWILIO_ACCOUNT_SID')
-TWILIO_AUTH_TOKEN = get_config_value('TWILIO_AUTH_TOKEN')
-TWILIO_WHATSAPP_NUMBER = get_config_value('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
 
 # AI API Keys
-PERPLEXITY_API_KEY = get_config_value('PERPLEXITY_API_KEY')
+PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -224,8 +205,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = get_config_value('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = get_config_value('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # All sensitive configurations (Twilio, Email, Perplexity) are now handled at the top
