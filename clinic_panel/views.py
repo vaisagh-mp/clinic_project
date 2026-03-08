@@ -445,7 +445,7 @@ class PatientListCreateAPIView(APIView):
         """
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
@@ -527,7 +527,7 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         """
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None

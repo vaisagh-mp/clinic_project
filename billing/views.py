@@ -216,7 +216,7 @@ class LabBillRetrieveUpdateDeleteAPIView(APIView):
     def get_clinic(self, request):
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
@@ -539,7 +539,7 @@ class ClinicLabBillListCreateAPIView(APIView):
     def get_clinic(self, request):
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
@@ -595,7 +595,7 @@ class ClinicLabBillRetrieveUpdateDeleteAPIView(APIView):
     def get_clinic(self, request):
         user = request.user
 
-        if getattr(user, "role", "").lower() == "superadmin":
+        if user.role.lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None

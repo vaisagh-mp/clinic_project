@@ -10,7 +10,7 @@ def get_acting_user_context(request):
     from rest_framework_simplejwt.tokens import AccessToken
     
     user = request.user
-    if not user.is_authenticated or getattr(user, "role", "").upper() != "SUPERADMIN":
+    if not user.is_authenticated or user.role.upper() != "SUPERADMIN":
         return None
 
     auth_header = request.headers.get("Authorization", "")

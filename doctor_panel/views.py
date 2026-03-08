@@ -31,7 +31,7 @@ class DoctorDashboardAPIView(APIView):
         doctor = None
 
         # --- Case 1: Superadmin (switching between doctors) ---
-        if getattr(user, "role", "").upper() == "SUPERADMIN":
+        if user.role == "SUPERADMIN":
             if doctor_id:
                 # If doctor_id is passed in URL, load that doctor's dashboard
                 try:
@@ -42,7 +42,7 @@ class DoctorDashboardAPIView(APIView):
             else:
                 # Use centralized helper for acting user
                 target_user = get_acting_user_context(request)
-                if target_user and getattr(target_user, "role", "").upper() == "DOCTOR":
+                if target_user and target_user.role == "DOCTOR":
                     doctor = getattr(target_user, "doctor_profile", None)
 
             # fallback if no doctor found
@@ -53,7 +53,7 @@ class DoctorDashboardAPIView(APIView):
                 doctor = doctor_profile
 
         # --- Case 2: Normal doctor user ---
-        elif getattr(user, "role", "").upper() == "DOCTOR":
+        elif user.role == "DOCTOR":
             try:
                 doctor = user.doctor_profile
             except Doctor.DoesNotExist:
@@ -118,7 +118,7 @@ class ConsultationListCreateAPIView(APIView):
         user = request.user
         
         # Superadmin acting as someone
-        if getattr(user, "role", "").upper() == "SUPERADMIN":
+        if user.role == "SUPERADMIN":
             doctor_id = request.query_params.get("doctor_id") or request.data.get("doctor_id")
             if doctor_id:
                 return get_object_or_404(Doctor, id=doctor_id)
