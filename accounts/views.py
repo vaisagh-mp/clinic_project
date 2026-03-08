@@ -98,9 +98,9 @@ class RoleBasedLoginView(TokenObtainPairView):
         if user.is_superuser or user.role == "ADMIN":
             return "admin_panel:dashboard"
         elif user.role == "CLINIC":
-            return "clinic_panel:clinic-dashboard"
+            return "clinic_panel:dashboard"
         elif user.role == "DOCTOR":
-            return "doctor_panel:doctor-dashboard"
+            return "doctor_panel:dashboard"
         return None
 
 
