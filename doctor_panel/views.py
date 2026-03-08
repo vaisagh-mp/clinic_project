@@ -2,7 +2,6 @@ from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
-from rest_framework_simplejwt.backends import TokenBackend
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
@@ -18,7 +17,7 @@ from django.db import transaction
 from clinic_project.permissions import RoleBasedPanelAccess
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from clinic_project.utils import get_clinic_context
+from clinic_project.utils import get_clinic_context, get_acting_user_context
 
 User = get_user_model()
 
@@ -41,18 +40,10 @@ class DoctorDashboardAPIView(APIView):
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
-                # fallback: token may have 'acting_as' info
-                auth_header = request.headers.get("Authorization", "")
-                token = auth_header.split(" ")[1] if " " in auth_header else None
-                if token:
-                    try:
-                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                        acting_as_id = payload.get("target_id")
-                        if acting_as_id:
-                            acting_user = User.objects.get(id=acting_as_id)
-                            doctor = acting_user.doctor_profile
-                    except Exception:
-                        pass
+                # Use centralized helper for acting user
+                target_user = get_acting_user_context(request)
+                if target_user and target_user.role == "DOCTOR":
+                    doctor = getattr(target_user, "doctor_profile", None)
 
             # fallback if no doctor found
             if not doctor:
@@ -131,19 +122,10 @@ class ConsultationListCreateAPIView(APIView):
             if doctor_id:
                 return get_object_or_404(Doctor, id=doctor_id)
             
-            # fallback to acting_as token
-            auth_header = request.headers.get("Authorization", "")
-            token = auth_header.split(" ")[1] if " " in auth_header else None
-            if token:
-                try:
-                    payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                    target_id = payload.get("target_id")
-                    if target_id:
-                        target_user = User.objects.get(id=target_id)
-                        if hasattr(target_user, "doctor_profile"):
-                            return target_user.doctor_profile
-                except Exception:
-                    pass
+            # Use centralized helper for acting user
+            target_user = get_acting_user_context(request)
+            if target_user and hasattr(target_user, "doctor_profile"):
+                return target_user.doctor_profile
             raise PermissionDenied("doctor_id is required for superadmin or switch to a doctor panel.")
 
         elif hasattr(user, "doctor_profile"):

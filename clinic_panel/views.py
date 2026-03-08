@@ -15,7 +15,6 @@ from doctor_panel.serializers import PrescriptionSerializer, ConsultationSeriali
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer, PatientHistorySerializer
 from clinic_project.utils import get_clinic_context
 from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework.permissions import IsAuthenticated
 
 
@@ -123,14 +122,7 @@ class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """✅ Determine clinic for this request."""
-        user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")  # superadmin acting as clinic
-            if not clinic_id:
-                return None
-            return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+        return get_clinic_context(request)
 
     def get(self, request):
         clinic = get_clinic_context(request)
@@ -159,14 +151,7 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        """✅ Determine clinic for this request."""
-        user = request.user
-        if user.role.lower() == "superadmin":
-            clinic_id = request.query_params.get("clinic_id")
-            if not clinic_id:
-                return None
-            return get_object_or_404(Clinic, id=clinic_id)
-        return getattr(user, "clinic_profile", None)
+        return get_clinic_context(request)
 
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)

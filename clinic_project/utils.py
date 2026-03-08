@@ -3,6 +3,28 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+def get_acting_user_context(request):
+    """
+    Returns the user object that a Superadmin is currently acting as.
+    """
+    from rest_framework_simplejwt.tokens import AccessToken
+    
+    user = request.user
+    if not user.is_authenticated or user.role.upper() != "SUPERADMIN":
+        return None
+
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.split(" ")[1] if " " in auth_header else None
+    if token:
+        try:
+            token_obj = AccessToken(token)
+            target_user_id = token_obj.get("target_id") or token_obj.get("acting_as_user_id")
+            if target_user_id:
+                return User.objects.get(id=target_user_id)
+        except Exception:
+            pass
+    return None
+
 def get_clinic_context(request):
     """
     Centralized helper to determine the clinic context for a request.
@@ -12,7 +34,6 @@ def get_clinic_context(request):
     3. Doctor users (via their clinic profile)
     """
     from admin_panel.models import Clinic
-    from rest_framework_simplejwt.tokens import AccessToken
     
     user = request.user
     if not user.is_authenticated:
@@ -28,17 +49,9 @@ def get_clinic_context(request):
 
     # --- 2. Token-based 'acting as' logic (for Superadmin) ---
     if user.role.upper() == "SUPERADMIN":
-        auth_header = request.headers.get("Authorization", "")
-        token = auth_header.split(" ")[1] if " " in auth_header else None
-                # Use AccessToken for safer decoding
-                token_obj = AccessToken(token)
-                target_user_id = token_obj.get("target_id") or token_obj.get("acting_as_user_id")
-                if target_user_id:
-                    target_user = User.objects.get(id=target_user_id)
-                    if hasattr(target_user, "clinic_profile"):
-                        return target_user.clinic_profile
-            except Exception:
-                pass
+        target_user = get_acting_user_context(request)
+        if target_user and hasattr(target_user, "clinic_profile"):
+            return target_user.clinic_profile
 
     # --- 3. Role-based fallback ---
     if user.role.upper() == "CLINIC":

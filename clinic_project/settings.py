@@ -141,11 +141,11 @@ SIMPLE_JWT = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'clinic',
-        'USER': 'clinic',
-        'PASSWORD': 'clinic',
-        'HOST': 'localhost',
-        'PORT': '',
+        'NAME': os.getenv('DB_NAME', 'clinic'),
+        'USER': os.getenv('DB_USER', 'clinic'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'clinic'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', ''),
     }
 }
 
