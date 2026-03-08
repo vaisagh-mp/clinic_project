@@ -1,7 +1,5 @@
-from rest_framework_simplejwt.backends import TokenBackend
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from admin_panel.models import Clinic
 
 User = get_user_model()
 
@@ -13,6 +11,9 @@ def get_clinic_context(request):
     2. Clinic users (via their profile)
     3. Doctor users (via their clinic profile)
     """
+    from admin_panel.models import Clinic
+    from rest_framework_simplejwt.tokens import AccessToken
+    
     user = request.user
     if not user.is_authenticated:
         return None
@@ -29,11 +30,9 @@ def get_clinic_context(request):
     if user.role.upper() == "SUPERADMIN":
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.split(" ")[1] if " " in auth_header else None
-        if token:
-            try:
-                # We use the key 'target_id' which will be unified in switch_panel
-                payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
-                target_user_id = payload.get("target_id") or payload.get("acting_as_user_id")
+                # Use AccessToken for safer decoding
+                token_obj = AccessToken(token)
+                target_user_id = token_obj.get("target_id") or token_obj.get("acting_as_user_id")
                 if target_user_id:
                     target_user = User.objects.get(id=target_user_id)
                     if hasattr(target_user, "clinic_profile"):
