@@ -79,33 +79,28 @@ class RoleBasedLoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        try:
-            # First check username/password manually
-            login_serializer = LoginSerializer(data=request.data)
-            login_serializer.is_valid(raise_exception=True)
-            user = login_serializer.validated_data["user"]
+        # First check username/password manually
+        login_serializer = LoginSerializer(data=request.data)
+        login_serializer.is_valid(raise_exception=True)
+        user = login_serializer.validated_data["user"]
 
-            # Get JWT tokens
-            refresh = RefreshToken.for_user(user)
+        # Get JWT tokens
+        refresh = RefreshToken.for_user(user)
 
-            return Response({
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "user": UserSerializer(user).data,
-                "redirect_to": self.get_redirect(user),
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            import traceback
-            print(traceback.format_exc())
-            return Response({"error": str(e), "traceback": traceback.format_exc()}, status=500)
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UserSerializer(user).data,
+            "redirect_to": self.get_redirect(user),
+        }, status=status.HTTP_200_OK)
 
     def get_redirect(self, user):
         if user.is_superuser or user.role == "ADMIN":
             return "admin_panel:dashboard"
         elif user.role == "CLINIC":
-            return "clinic_panel:dashboard"
+            return "clinic_panel:clinic-dashboard"
         elif user.role == "DOCTOR":
-            return "doctor_panel:dashboard"
+            return "doctor_panel:doctor-dashboard"
         return None
 
 
