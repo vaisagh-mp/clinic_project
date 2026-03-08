@@ -526,17 +526,39 @@ class PatientListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        data = request.data.copy()
+        data.pop("files", None)
+
         serializer = PatientSerializer(
-            data=request.data,
+            data=data,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-            return Response(
-                PatientSerializer(patient).data,
-                status=status.HTTP_201_CREATED
-            )
+
+            # Handle files manually (check both FILES and data)
+            files = request.FILES.getlist("files") or request.data.getlist("files")
+            print(f"DEBUG: Processing {len(files)} files for new patient")
+            
+            created_attachments = []
+            for file in files:
+                if hasattr(file, "read"): # verify it's a file
+                    att = PatientAttachment.objects.create(
+                        patient=patient,
+                        file=file
+                    )
+                    created_attachments.append(att)
+                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
+
+            # Refresh to avoid stale prefetched attachments
+            patient = Patient.objects.prefetch_related("attachments").get(pk=patient.pk)
+            # Return flat response for compatibility
+            response_data = PatientSerializer(patient).data
+            response_data["files_processed"] = len(created_attachments)
+            print(f"DEBUG: Returning {len(created_attachments)} processed files")
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(
             serializer.errors,
@@ -605,18 +627,40 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
         patient = self.get_object(pk, clinic)
 
+        data = request.data.copy()
+        data.pop("files", None)
+
         serializer = PatientSerializer(
             patient,
-            data=request.data,
+            data=data,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-            return Response(
-                PatientSerializer(patient).data,
-                status=status.HTTP_200_OK
-            )
+
+            # Handle files manually (check both FILES and data)
+            files = request.FILES.getlist("files") or request.data.getlist("files")
+            print(f"DEBUG: Processing {len(files)} files for patient {pk} (PUT)")
+            
+            created_attachments = []
+            for file in files:
+                if hasattr(file, "read"):
+                    att = PatientAttachment.objects.create(
+                        patient=patient,
+                        file=file
+                    )
+                    created_attachments.append(att)
+                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
+
+            # Refresh patient to clear old prefetch cache
+            patient = self.get_object(pk, clinic)
+            # Return flat response for compatibility
+            response_data = PatientSerializer(patient).data
+            response_data["files_processed"] = len(created_attachments)
+            print(f"DEBUG: Returning {len(created_attachments)} processed files")
+            
+            return Response(response_data, status=status.HTTP_200_OK)
 
         return Response(
             serializer.errors,
@@ -636,19 +680,41 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
         patient = self.get_object(pk, clinic)
 
+        data = request.data.copy()
+        data.pop("files", None)
+
         serializer = PatientSerializer(
             patient,
-            data=request.data,
+            data=data,
             partial=True,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-            return Response(
-                PatientSerializer(patient).data,
-                status=status.HTTP_200_OK
-            )
+
+            # Handle files manually (check both FILES and data)
+            files = request.FILES.getlist("files") or request.data.getlist("files")
+            print(f"DEBUG: Processing {len(files)} files for patient {pk}")
+            
+            created_attachments = []
+            for file in files:
+                if hasattr(file, "read"):
+                    att = PatientAttachment.objects.create(
+                        patient=patient,
+                        file=file
+                    )
+                    created_attachments.append(att)
+                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
+
+            # Refresh patient to clear old prefetch cache
+            patient = self.get_object(pk, clinic)
+            # Return flat response for compatibility
+            response_data = PatientSerializer(patient).data
+            response_data["files_processed"] = len(created_attachments)
+            print(f"DEBUG: Returning {len(created_attachments)} processed files")
+            
+            return Response(response_data, status=status.HTTP_200_OK)
 
         return Response(
             serializer.errors,
