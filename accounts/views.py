@@ -79,20 +79,25 @@ class RoleBasedLoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # First check username/password manually
-        login_serializer = LoginSerializer(data=request.data)
-        login_serializer.is_valid(raise_exception=True)
-        user = login_serializer.validated_data["user"]
+        try:
+            # First check username/password manually
+            login_serializer = LoginSerializer(data=request.data)
+            login_serializer.is_valid(raise_exception=True)
+            user = login_serializer.validated_data["user"]
 
-        # Get JWT tokens
-        refresh = RefreshToken.for_user(user)
+            # Get JWT tokens
+            refresh = RefreshToken.for_user(user)
 
-        return Response({
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": UserSerializer(user).data,
-            "redirect_to": self.get_redirect(user),
-        }, status=status.HTTP_200_OK)
+            return Response({
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": UserSerializer(user).data,
+                "redirect_to": self.get_redirect(user),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e), "traceback": traceback.format_exc()}, status=500)
 
     def get_redirect(self, user):
         if user.is_superuser or user.role == "ADMIN":
