@@ -217,7 +217,7 @@ class LabBillSerializer(serializers.ModelSerializer):
         # -------------------------
         clinic = None
         if user:
-            if user.role.lower() == "superadmin":
+            if getattr(user, "role", "").lower() == "superadmin":
                 clinic_id = request.query_params.get("clinic_id")
                 if clinic_id:
                     clinic = Clinic.objects.filter(id=clinic_id).first()

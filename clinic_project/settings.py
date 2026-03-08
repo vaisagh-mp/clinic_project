@@ -10,19 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import boto3
 from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Twilio WhatsApp Configuration
-TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
-TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
-TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
-
-# AI API Keys
-PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -141,11 +134,11 @@ SIMPLE_JWT = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'clinic',
-        'USER': 'clinic',
-        'PASSWORD': 'clinic',
-        'HOST': 'localhost',
-        'PORT': '',
+        'NAME': os.getenv('DB_NAME', 'clinic'),
+        'USER': os.getenv('DB_USER', 'clinic'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'clinic'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', ''),
     }
 }
 
@@ -204,9 +197,29 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_USER = 'vaisaghmp3@gmail.com'
+EMAIL_HOST_PASSWORD = 'fpie nque luuj hyac'
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-# All sensitive configurations (Twilio, Email, Perplexity) are now handled at the top
-# of this file via the get_config_value() helper, which supports AWS SSM and .env.
+from django.core.exceptions import ImproperlyConfigured
+# ENVIRONMENT = os.environ.get("ENV", "local")   # local | production
+
+# if ENVIRONMENT == "production":
+#     ssm = boto3.client('ssm', region_name='ap-south-1')
+#     PERPLEXITY_API_KEY = ssm.get_parameter(
+#         Name='/clinic/PERPLEXITY_API_KEY',
+#         WithDecryption=True
+#     )['Parameter']['Value']
+# else:
+#     # Load from .env for local development
+#     PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
+# if not PERPLEXITY_API_KEY:
+#     raise ImproperlyConfigured("PERPLEXITY_API_KEY is missing")
+
+ssm = boto3.client('ssm', region_name='ap-south-1')
+
+PERPLEXITY_API_KEY = ssm.get_parameter(
+    Name='/clinic/PERPLEXITY_API_KEY',
+    WithDecryption=True
+)['Parameter']['Value']

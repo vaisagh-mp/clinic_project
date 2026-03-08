@@ -4,7 +4,3 @@ from django.apps import AppConfig
 class ClinicPanelConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'clinic_panel'
-
-    def ready(self):
-        import clinic_panel.signals
-

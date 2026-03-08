@@ -13,8 +13,8 @@ from doctor_panel.models import Prescription, Consultation
 from admin_panel.serializers import DoctorSerializer, PatientSerializer, AppointmentSerializer, ClinicAppointmentSerializer
 from doctor_panel.serializers import PrescriptionSerializer, ConsultationSerializer
 from .serializers import ClinicPrescriptionListSerializer, ClinicConsultationSerializer, PatientHistorySerializer
-from clinic_project.utils import get_clinic_context
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework.permissions import IsAuthenticated
 
 
@@ -24,11 +24,48 @@ class ClinicDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, clinic_id=None):
-        clinic = get_clinic_context(request)
-        if not clinic:
-            return Response({"error": "Clinic not found or unauthorized"}, status=403)
-
         user = request.user
+        clinic = None
+
+        # --- Case 1: Superadmin (switching between clinics) ---
+        if user.role == "SUPERADMIN":
+            if clinic_id:
+                try:
+                    target_user = User.objects.get(id=clinic_id, role="CLINIC")
+                    clinic = target_user.clinic_profile
+                except (User.DoesNotExist, Clinic.DoesNotExist):
+                    return Response({"error": "Clinic not found."}, status=404)
+            else:
+                # fallback: use token acting_as info
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header.split(" ")[1] if " " in auth_header else None
+                if token:
+                    try:
+                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                        acting_as_id = payload.get("target_id")
+                        if acting_as_id:
+                            acting_user = User.objects.get(id=acting_as_id)
+                            clinic = acting_user.clinic_profile
+                    except Exception:
+                        pass
+
+            if not clinic:
+                clinic = Clinic.objects.first()
+                if not clinic:
+                    return Response({"error": "No clinic available to access."}, status=404)
+
+        # --- Case 2: Normal clinic user ---
+        elif user.role == "CLINIC":
+            try:
+                clinic = user.clinic_profile
+                if clinic_id and clinic.user.id != clinic_id:
+                    return Response({"error": "Unauthorized access."}, status=403)
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic profile not found."}, status=404)
+
+        # --- Case 3: Others ---
+        else:
+            return Response({"error": "Only clinic users or superadmin can access this endpoint."}, status=403)
 
         # --- Fetch related data ---
         doctors = Doctor.objects.filter(clinic=clinic)
@@ -122,10 +159,17 @@ class DoctorListCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        return get_clinic_context(request)
+        """✅ Determine clinic for this request."""
+        user = request.user
+        if user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")  # superadmin acting as clinic
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+        return getattr(user, "clinic_profile", None)
 
     def get(self, request):
-        clinic = get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 
@@ -134,7 +178,7 @@ class DoctorListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        clinic = get_clinic_context(request)
+        clinic = self.get_clinic(request)
         if not clinic:
             return Response({"error": "Clinic not found or not authorized"}, status=403)
 
@@ -151,7 +195,14 @@ class DoctorRetrieveUpdateDeleteAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_clinic(self, request):
-        return get_clinic_context(request)
+        """✅ Determine clinic for this request."""
+        user = request.user
+        if user.role.lower() == "superadmin":
+            clinic_id = request.query_params.get("clinic_id")
+            if not clinic_id:
+                return None
+            return get_object_or_404(Clinic, id=clinic_id)
+        return getattr(user, "clinic_profile", None)
 
     def get_object(self, pk, clinic):
         return get_object_or_404(Doctor, pk=pk, clinic=clinic)
@@ -445,7 +496,7 @@ class PatientListCreateAPIView(APIView):
         """
         user = request.user
 
-        if user.role.lower() == "superadmin":
+        if getattr(user, "role", "").lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
@@ -475,39 +526,17 @@ class PatientListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        data = request.data.copy()
-        data.pop("files", None)
-
         serializer = PatientSerializer(
-            data=data,
+            data=request.data,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-
-            # Handle files manually (check both FILES and data)
-            files = request.FILES.getlist("files") or request.data.getlist("files")
-            print(f"DEBUG: Processing {len(files)} files for new patient")
-            
-            created_attachments = []
-            for file in files:
-                if hasattr(file, "read"): # verify it's a file
-                    att = PatientAttachment.objects.create(
-                        patient=patient,
-                        file=file
-                    )
-                    created_attachments.append(att)
-                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
-
-            # Refresh to avoid stale prefetched attachments
-            patient = Patient.objects.prefetch_related("attachments").get(pk=patient.pk)
-            # Return flat response for compatibility
-            response_data = PatientSerializer(patient).data
-            response_data["files_processed"] = len(created_attachments)
-            print(f"DEBUG: Returning {len(created_attachments)} processed files")
-            
-            return Response(response_data, status=status.HTTP_201_CREATED)
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_201_CREATED
+            )
 
         return Response(
             serializer.errors,
@@ -527,7 +556,7 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         """
         user = request.user
 
-        if user.role.lower() == "superadmin":
+        if getattr(user, "role", "").lower() == "superadmin":
             clinic_id = request.query_params.get("clinic_id")
             if not clinic_id:
                 return None
@@ -576,40 +605,18 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
         patient = self.get_object(pk, clinic)
 
-        data = request.data.copy()
-        data.pop("files", None)
-
         serializer = PatientSerializer(
             patient,
-            data=data,
+            data=request.data,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-
-            # Handle files manually (check both FILES and data)
-            files = request.FILES.getlist("files") or request.data.getlist("files")
-            print(f"DEBUG: Processing {len(files)} files for patient {pk} (PUT)")
-            
-            created_attachments = []
-            for file in files:
-                if hasattr(file, "read"):
-                    att = PatientAttachment.objects.create(
-                        patient=patient,
-                        file=file
-                    )
-                    created_attachments.append(att)
-                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
-
-            # Refresh patient to clear old prefetch cache
-            patient = self.get_object(pk, clinic)
-            # Return flat response for compatibility
-            response_data = PatientSerializer(patient).data
-            response_data["files_processed"] = len(created_attachments)
-            print(f"DEBUG: Returning {len(created_attachments)} processed files")
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_200_OK
+            )
 
         return Response(
             serializer.errors,
@@ -629,41 +636,19 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
 
         patient = self.get_object(pk, clinic)
 
-        data = request.data.copy()
-        data.pop("files", None)
-
         serializer = PatientSerializer(
             patient,
-            data=data,
+            data=request.data,
             partial=True,
             context={"request": request}
         )
 
         if serializer.is_valid():
             patient = serializer.save()
-
-            # Handle files manually (check both FILES and data)
-            files = request.FILES.getlist("files") or request.data.getlist("files")
-            print(f"DEBUG: Processing {len(files)} files for patient {pk}")
-            
-            created_attachments = []
-            for file in files:
-                if hasattr(file, "read"):
-                    att = PatientAttachment.objects.create(
-                        patient=patient,
-                        file=file
-                    )
-                    created_attachments.append(att)
-                    print(f"DEBUG: Created attachment {att.id} for {file.name}")
-
-            # Refresh patient to clear old prefetch cache
-            patient = self.get_object(pk, clinic)
-            # Return flat response for compatibility
-            response_data = PatientSerializer(patient).data
-            response_data["files_processed"] = len(created_attachments)
-            print(f"DEBUG: Returning {len(created_attachments)} processed files")
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response(
+                PatientSerializer(patient).data,
+                status=status.HTTP_200_OK
+            )
 
         return Response(
             serializer.errors,

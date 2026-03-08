@@ -2,6 +2,7 @@ from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
+from rest_framework_simplejwt.backends import TokenBackend
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
@@ -17,7 +18,6 @@ from django.db import transaction
 from clinic_project.permissions import RoleBasedPanelAccess
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from clinic_project.utils import get_clinic_context, get_acting_user_context
 
 User = get_user_model()
 
@@ -36,21 +36,28 @@ class DoctorDashboardAPIView(APIView):
                 # If doctor_id is passed in URL, load that doctor's dashboard
                 try:
                     target_user = User.objects.get(id=doctor_id, role="DOCTOR")
-                    doctor = getattr(target_user, "doctor_profile", None)
+                    doctor = target_user.doctor_profile
                 except (User.DoesNotExist, Doctor.DoesNotExist):
                     return Response({"error": "Doctor not found."}, status=404)
             else:
-                # Use centralized helper for acting user
-                target_user = get_acting_user_context(request)
-                if target_user and target_user.role == "DOCTOR":
-                    doctor = getattr(target_user, "doctor_profile", None)
+                # fallback: token may have 'acting_as' info
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header.split(" ")[1] if " " in auth_header else None
+                if token:
+                    try:
+                        payload = TokenBackend(algorithm='HS256').decode(token, verify=False)
+                        acting_as_id = payload.get("target_id")
+                        if acting_as_id:
+                            acting_user = User.objects.get(id=acting_as_id)
+                            doctor = acting_user.doctor_profile
+                    except Exception:
+                        pass
 
             # fallback if no doctor found
             if not doctor:
-                doctor_profile = Doctor.objects.first()
-                if not doctor_profile:
+                doctor = Doctor.objects.first()
+                if not doctor:
                     return Response({"error": "No doctor found to access."}, status=404)
-                doctor = doctor_profile
 
         # --- Case 2: Normal doctor user ---
         elif user.role == "DOCTOR":
@@ -112,23 +119,15 @@ class ConsultationListCreateAPIView(APIView):
     def get_doctor(self, request):
         """
         Determine which doctor to use:
-        - If Superadmin, use ?doctor_id=<id> or acting_as context
+        - If Superadmin, use ?doctor_id=<id>
         - If Doctor, use their profile
         """
         user = request.user
-        
-        # Superadmin acting as someone
-        if user.role == "SUPERADMIN":
-            doctor_id = request.query_params.get("doctor_id") or request.data.get("doctor_id")
-            if doctor_id:
-                return get_object_or_404(Doctor, id=doctor_id)
-            
-            # Use centralized helper for acting user
-            target_user = get_acting_user_context(request)
-            if target_user and hasattr(target_user, "doctor_profile"):
-                return target_user.doctor_profile
-            raise PermissionDenied("doctor_id is required for superadmin or switch to a doctor panel.")
-
+        if user.role.lower() == "superadmin":
+            doctor_id = request.query_params.get("doctor_id")
+            if not doctor_id:
+                raise PermissionDenied("doctor_id is required for superadmin.")
+            return get_object_or_404(Doctor, id=doctor_id)
         elif hasattr(user, "doctor_profile"):
             return user.doctor_profile
         raise PermissionDenied("Only doctors or superadmins can access consultations.")

@@ -1,0 +1,7 @@
+name,email,age
+Alice,alice@example.com,28
+Bob,bob@example.com,130
+Charlie,charlie@example.com,32
+,invalid@example.com,25
+David,duplicate@example.com,40
+Eve,duplicate@example.com,35
