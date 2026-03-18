@@ -388,7 +388,9 @@ class PatientSerializer(serializers.ModelSerializer):
         # Send WhatsApp text notification for new attachments
         if files:
             update_msg = (
-                f"Hello {instance.first_name}, a new document has been added to your record at {instance.clinic.name}."
+                f"Hello {instance.first_name}, welcome to {instance.clinic.name}. "
+                f"A new document has been added to your record. "
+                f"File Number: {instance.file_number}"
             )
             send_patient_whatsapp(instance.phone_number, update_msg)
 
