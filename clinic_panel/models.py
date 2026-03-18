@@ -214,19 +214,23 @@ class Patient(BaseModel):
         # ✔ Use provided file_number if present
         if not self.file_number and self.clinic_id:
             with transaction.atomic():
-                last_file = (
+                last_patient = (
                     Patient.objects
                     .filter(clinic=self.clinic)
                     .exclude(file_number__isnull=True)
-                    .aggregate(max_file=Max("file_number"))
-                    .get("max_file")
+                    .exclude(file_number__exact="")
+                    .order_by("-id")
+                    .first()
                 )
 
-                if last_file:
-                    last_number = int(last_file.split("-")[-1])
-                    next_number = last_number + 1
+                if last_patient and last_patient.file_number:
+                    try:
+                        last_number = int(last_patient.file_number.split("-")[-1])
+                        next_number = last_number + 1
+                    except ValueError:
+                        next_number = self.clinic.file_number_start
                 else:
-                    next_number = 1
+                    next_number = self.clinic.file_number_start
 
                 self.file_number = f"CL{self.clinic.id}-P-{next_number:05d}"
 

@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def send_patient_whatsapp(phone_number, message):
+def send_patient_whatsapp(phone_number, message, media_urls=None):
     """
     Sends a WhatsApp message to a patient using Twilio.
     """
@@ -19,13 +19,17 @@ def send_patient_whatsapp(phone_number, message):
         # Format phone number if needed (assuming incoming is +...)
         to_number = f"whatsapp:{phone_number}" if not phone_number.startswith("whatsapp:") else phone_number
 
-        message = client.messages.create(
-            from_=settings.TWILIO_WHATSAPP_NUMBER,
-            body=message,
-            to=to_number
-        )
+        kwargs = {
+            "from_": settings.TWILIO_WHATSAPP_NUMBER,
+            "body": message,
+            "to": to_number
+        }
+        if media_urls:
+            kwargs["media_url"] = media_urls
 
-        logger.info(f"WhatsApp message sent successfully: {message.sid}")
+        message_obj = client.messages.create(**kwargs)
+
+        logger.info(f"WhatsApp message sent successfully: {message_obj.sid}")
         return True
     except Exception as e:
         logger.error(f"Failed to send WhatsApp message: {str(e)}")

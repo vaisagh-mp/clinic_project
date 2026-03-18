@@ -338,26 +338,7 @@ class PatientSerializer(serializers.ModelSerializer):
 
 
         # =====================================================
-        # FILE NUMBER AUTO-GENERATION LOGIC
-        # =====================================================
-        file_number = validated_data.get("file_number")
-
-        if not file_number:
-            last_file = (
-                Patient.objects
-                .filter(
-                    clinic=clinic,
-                    file_number__regex=r'^\d+$'
-                )
-                .aggregate(max_no=Max("file_number"))
-            )["max_no"]
-
-            if last_file:
-                next_file_number = int(last_file) + 1
-            else:
-                next_file_number = clinic.file_number_start
-
-            validated_data["file_number"] = str(next_file_number)
+        # Let Patient.save() auto-generate the file_number
         # =====================================================
 
         # Create patient
@@ -398,18 +379,24 @@ class PatientSerializer(serializers.ModelSerializer):
         instance.files_processed = len(files)
     
         # Save new attachments (append, do NOT remove old ones)
+        request = self.context.get("request")
+        media_urls = []
+
         for file in files:
-            PatientAttachment.objects.create(
+            attachment = PatientAttachment.objects.create(
                 patient=instance,
                 file=file
             )
+            # To send via Twilio, media_url must be an absolute public URL
+            if request and attachment.file:
+                media_urls.append(request.build_absolute_uri(attachment.file.url))
     
         # Send WhatsApp notification for new attachments
         if files:
             update_msg = (
                 f"Hello {instance.first_name}, a new document has been added to your record at {instance.clinic.name}."
             )
-            send_patient_whatsapp(instance.phone_number, update_msg)
+            send_patient_whatsapp(instance.phone_number, update_msg, media_urls=media_urls)
 
         return instance
 
