@@ -379,27 +379,18 @@ class PatientSerializer(serializers.ModelSerializer):
         instance.files_processed = len(files)
     
         # Save new attachments (append, do NOT remove old ones)
-        request = self.context.get("request")
-        media_urls = []
-
         for file in files:
-            attachment = PatientAttachment.objects.create(
+            PatientAttachment.objects.create(
                 patient=instance,
                 file=file
             )
-            # Twilio requires media_url to be a PUBLIC HTTPS URL
-            if request and attachment.file:
-                raw_url = request.build_absolute_uri(attachment.file.url)
-                # Force HTTPS — Twilio rejects plain HTTP media URLs
-                https_url = raw_url.replace("http://", "https://", 1)
-                media_urls.append(https_url)
     
-        # Send WhatsApp notification for new attachments
+        # Send WhatsApp text notification for new attachments
         if files:
             update_msg = (
                 f"Hello {instance.first_name}, a new document has been added to your record at {instance.clinic.name}."
             )
-            send_patient_whatsapp(instance.phone_number, update_msg, media_urls=media_urls)
+            send_patient_whatsapp(instance.phone_number, update_msg)
 
         return instance
 
