@@ -32,5 +32,9 @@ def send_patient_whatsapp(phone_number, message, media_urls=None):
         logger.info(f"WhatsApp message sent successfully: {message_obj.sid}")
         return True
     except Exception as e:
-        logger.error(f"Failed to send WhatsApp message: {str(e)}")
+        # Log the exact Twilio error (includes error code and message)
+        error_msg = getattr(e, 'msg', None) or str(e)
+        error_code = getattr(e, 'code', None)
+        logger.error(f"Failed to send WhatsApp message. Code={error_code}, Reason={error_msg}")
+        print(f"[TWILIO ERROR] Code={error_code} | Reason={error_msg}")
         return False

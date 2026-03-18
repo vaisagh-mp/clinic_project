@@ -387,9 +387,12 @@ class PatientSerializer(serializers.ModelSerializer):
                 patient=instance,
                 file=file
             )
-            # To send via Twilio, media_url must be an absolute public URL
+            # Twilio requires media_url to be a PUBLIC HTTPS URL
             if request and attachment.file:
-                media_urls.append(request.build_absolute_uri(attachment.file.url))
+                raw_url = request.build_absolute_uri(attachment.file.url)
+                # Force HTTPS — Twilio rejects plain HTTP media URLs
+                https_url = raw_url.replace("http://", "https://", 1)
+                media_urls.append(https_url)
     
         # Send WhatsApp notification for new attachments
         if files:
